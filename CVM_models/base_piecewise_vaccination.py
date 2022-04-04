@@ -72,11 +72,11 @@ class BaseSingleClusterVacModel:
         self.state_index = {}
         self.infectious_symptomatic_index = {}
         self.infectious_asymptomatic_index = {}
-        self.conactable_state_index = {}
+        self.conactable_states_index = {}
         # populating index dictionaries
         index = 0
         for vaccine_group in self.vaccination_groups:
-            self.conactable_state_index[vaccine_group] = {}
+            self.conactable_states_index[vaccine_group] = {}
             self.state_index[vaccine_group] = {}
             self.infectious_symptomatic_index[vaccine_group] = {}
             self.infectious_asymptomatic_index[vaccine_group] = {}
@@ -87,7 +87,7 @@ class BaseSingleClusterVacModel:
                 if state in self.infectious_and_asymptomatic_states:
                     self.infectious_asymptomatic_index[vaccine_group][state] = index
                 if state in self.contactable_states:
-                    self.conactable_state_index[vaccine_group][state] = index
+                    self.conactable_states_index[vaccine_group][state] = index
                 index += 1
 
         self.state_index['observed_states'] = {}
@@ -110,10 +110,10 @@ class BaseSingleClusterVacModel:
         """
         infectious_asymptomatic_index = self._nesteddictvalues(self.infectious_asymptomatic_index)
         infectious_symptomatic_index = self._nesteddictvalues(self.infectious_symptomatic_index)
-        contactable_index = self._nesteddictvalues(self.contactable_index)
+        conactable_states_index = self._nesteddictvalues(self.conactable_states_index)
         total_infectous_asymptomatic = y[infectious_asymptomatic_index].sum()
         total_infectous_symptomatic = y[infectious_symptomatic_index].sum()
-        total_contactable_population = y[contactable_index].sum()
+        total_contactable_population = y[conactable_states_index].sum()
         foi = (beta * (asymptomatic_tran_mod * total_infectous_asymptomatic +
                        total_infectous_symptomatic) / total_contactable_population)
         return foi

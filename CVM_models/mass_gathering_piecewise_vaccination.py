@@ -6,7 +6,7 @@ Description:
     
 """
 import numpy as np
-from base_piecewise_vaccination import BaseSingleClusterVacModel
+from .base_piecewise_vaccination import BaseSingleClusterVacModel
 
 
 

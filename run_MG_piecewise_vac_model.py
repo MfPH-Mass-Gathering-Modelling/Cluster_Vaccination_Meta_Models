@@ -2,7 +2,7 @@
 Creation:
     Author: Martin Grunnill
     Date: 01/04/2022
-Description:
+Description: Example code for running piecewise vaccination mass gathering model.
     
 """
 
@@ -14,6 +14,7 @@ from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 import seaborn as sns
 import copy
+
 
 #%%
 # Get Ontario's vaccination data
