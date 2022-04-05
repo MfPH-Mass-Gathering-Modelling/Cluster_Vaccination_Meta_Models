@@ -12,7 +12,6 @@ from pygom import TransitionType, Transition, DeterministicOde, SimulateOde
 class BaseMultiClusterVacConstructor:
     beta_list = []
     lambda_dict = {}
-    cluster_pops = {}
     transmission_combos = []
     all_states = []
     all_parameters = []
@@ -23,10 +22,10 @@ class BaseMultiClusterVacConstructor:
     vaccinable_states = []
     infectious_states = []
     symptomatic_states = []
-    contactable_states = []
+    dead_states = []
     non_specific_params = []
     vaccine_specific_params = []
-    cluster_specific_params = []
+    cluster_specific_params = ['N']
     vaccine_and_cluster_specific_params = ['nu']
     stoc_model = None
     det_model = None
@@ -38,34 +37,33 @@ class BaseMultiClusterVacConstructor:
                                                    if state not in self.symptomatic_states]
         self.clusters = clusters
         self.vaccine_groups = vaccine_groups
-        self.vaccine_specific_params_dict = {vaccine_specific_param: []
+        self.vaccine_specific_params_dict = {vaccine_specific_param:
+                                                 [vaccine_specific_param +'_'+ vaccine_group for vaccine_group in self.vaccine_groups]
                                              for vaccine_specific_param in
                                              self.vaccine_specific_params}
-        self.cluster_specific_params_dict = {cluster_specific_param: []
+        self.cluster_specific_params_dict = {cluster_specific_param:
+                                                 [cluster_specific_param +'_'+cluster for cluster in self.clusters]
                                               for cluster_specific_param in
-                                              self.cluster_specific_params}
+                                              self.cluster_specific_params
+                                             }
         self.vaccine_and_cluster_specific_params_dict = {vaccine_and_cluster_specific_param: []
                                                           for vaccine_and_cluster_specific_param in
                                                           self.vaccine_and_cluster_specific_params}
 
         self.states_dict = {state: [] for state in self.states}
         # Setting up clusters
-        self.cluster_contactable_population = {}
-        self.cluster_dead_pops = {}
-        self.cluster_living_and_dead_pops = {}
+        self.cluster_dead_population = {}
         for cluster_i in self.clusters:
-            cluster_pop = []
-            cluster_dead = []
-            for state in self.generic_states:
-                for vaccine_group in self.vaccine_groups:
+            dead_pop = []
+            for vaccine_group in self.vaccine_groups:
+                for state in self.states:
                     state_in_cluster = state + "_" + cluster_i + "_" + vaccine_group
                     self.all_states.append(state_in_cluster)
                     self.states_dict[state].append(state_in_cluster)
-                    if state in self.living_states:
-                        cluster_pop.append(state_in_cluster)
-                    else:
-                        cluster_dead.append(state_in_cluster)
-            self.cluster_contactable_population[cluster_i] = '+'.join(cluster_pop)
+                    if state in self.dead_states:
+                        dead_pop.append(state_in_cluster)
+
+            self.cluster_dead_population[cluster_i] = '+'.join(dead_pop)
         # setting up forces of infection
         self.append_semetric_transmission_from_list(self.clusters)
         self.derived_params = [('lambda_' + cluster_i, '+'.join(self.lambda_dict[cluster_i]))
@@ -84,17 +82,19 @@ class BaseMultiClusterVacConstructor:
         if transmission_combo not in self.transmission_combos:
             self.transmission_combos.append(transmission_combo)
             temp_lambda = ['theta*' + infectous_state + '_' + cluster_j + '_' + vaccine_group
-                           for infectous_state in self.infectous_non_symptomatic_states for vaccine_group in
+                           for infectous_state in self.infectious_and_asymptomatic_states for vaccine_group in
                            self.vaccine_groups]
             temp_lambda += [infectous_state + '_' + cluster_j + '_' + vaccine_group
-                            for infectous_state in self.infectous_symptomatic_states for vaccine_group in
+                            for infectous_state in self.infectious_and_symptomatic_states for vaccine_group in
                             self.vaccine_groups]
             beta = 'beta_' + cluster_i + '_' + cluster_j
             self.beta_list.append(beta)
             if cluster_i not in self.lambda_dict:
                 self.lambda_dict[cluster_i] = []
+            n_j = 'N_' + cluster_j
+            cluster_dead_population = "("+self.cluster_dead_population[cluster_j]+")"
             self.lambda_dict[cluster_i].append(
-                '(' + '+'.join(temp_lambda) + ')*' + beta + '/(' + self.cluster_contactable_population[cluster_j] + ')')
+                '(' + '+'.join(temp_lambda) + ')*' + beta + '/(' +n_j + '-'+ cluster_dead_population + ')')
 
     def append_intra_transmission(self, cluster_i):
         """Append cluster_i cluster_i transmssion term to beta_list and self.lambda_dict.

@@ -7,38 +7,31 @@ Description:
 """
 import copy
 from pygom import TransitionType, Transition
-from base_fixed_vaccination import BaseMultiClusterVacConstructor
+from CVM_models.base_fixed_vaccination import BaseMultiClusterVacConstructor
 
 
 class MGModelConstructor(BaseMultiClusterVacConstructor):
     states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'H', 'D', 'R']
-    contactable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'R']
+    dead_states = ['D']
     vaccinable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'R']
     infectious_states = ['T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2']
     symptomatic_states = ['I_1', 'I_2', 'H']
     non_specific_params = ['theta', 'epsilon_1', 'epsilon_2', 'epsilon_3',
                            'gamma_I_1', 'gamma_I_2', 'gamma_A_1', 'gamma_A_2',
                            'psi', 'rho']
-    cluster_specific_params = ['eta', 'mu']
+    cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['N', 'eta', 'mu']
     vaccine_specific_params = ['l', 'r', 'h', 'm']
 
     def __init__(self, clusters, vaccine_groups):
         super().__init__(clusters, vaccine_groups)
         for vaccine_stage, vaccine_group in enumerate(self.vaccine_groups):
             l_v = 'l_' + vaccine_group
-            self.vaccine_specific_params_dict['l'].append(l_v)
             r_v = 'r_' + vaccine_group
-            self.vaccine_specific_params_dict['r'].append(r_v)
             h_v = 'h_' + vaccine_group
-            self.vaccine_specific_params_dict['h'].append(h_v)
             m_v = 'm_' + vaccine_group
-            self.vaccine_specific_params_dict['m'].append(m_v)
             for cluster_i in self.clusters:
                 eta_i = 'eta_' + cluster_i
                 mu_i = 'mu_' + cluster_i
-                if vaccine_stage == 0:
-                    self.cluster_specific_params_dict['mu'].append(mu_i)
-                    self.cluster_specific_params_dict['eta'].append(eta_i)
                 lambda_i = 'lambda_' + cluster_i
 
                 S_i_v = "S_" + cluster_i + '_' + vaccine_group

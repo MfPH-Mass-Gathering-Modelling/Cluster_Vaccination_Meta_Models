@@ -6,13 +6,13 @@ Description:
     
 """
 import numpy as np
-from .base_piecewise_vaccination import BaseSingleClusterVacModel
+from CVM_models.base_piecewise_vaccination import BaseSingleClusterVacModel
 
 
 
 class MassGatheringModel(BaseSingleClusterVacModel):
     states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'H', 'D', 'R']
-    contactable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'R']
+    dead_states = ['D']
     vaccinable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'R']
     observed_states = ['H_total', 'D_total']
     infectious_states = ['T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2']
@@ -38,16 +38,16 @@ class MassGatheringModel(BaseSingleClusterVacModel):
             ):
         foi = self.foi(y, beta, asymptomatic_tran_mod)
         y_deltas = np.zeros(self.num_states)
-        for vacination_group in self.vaccination_groups:
-            self.vac_group_transfer(y, y_deltas, t, inverse_effective_delay, inverse_waning_immunity, vacination_group)
-            vac_group_states_index = self.state_index[vacination_group]
+        for vaccine_group in self.vaccination_groups:
+            self.vac_group_transfer(y, y_deltas, t, inverse_effective_delay, inverse_waning_immunity, vaccine_group)
+            vac_group_states_index = self.state_index[vaccine_group]
             # Infections
-            infections = (1 - self.ve_infection[vacination_group]) * foi * y[vac_group_states_index['S']]
+            infections = (1 - self.ve_infection[vaccine_group]) * foi * y[vac_group_states_index['S']]
             # progression to RT-pcr sensitivity
             now_rtpcr_sensitive = epsilon_1 * y[vac_group_states_index['E']]
             # progression to lfd/rapid antigen test sensitivity
             now_infectious_and_LFD_sensitive = epsilon_2 * y[vac_group_states_index['T']]
-            vac_group_symptomatic_prop = rho * (1 - self.ve_symptoms[vacination_group])
+            vac_group_symptomatic_prop = rho * (1 - self.ve_symptoms[vaccine_group])
             now_infectious_and_LFD_sensitive_will_be_symptomatic = vac_group_symptomatic_prop * now_infectious_and_LFD_sensitive
             now_infectious_and_LFD_sensitive_will_be_asymptomatic = (
                                                                                 1 - vac_group_symptomatic_prop) * now_infectious_and_LFD_sensitive
@@ -61,9 +61,9 @@ class MassGatheringModel(BaseSingleClusterVacModel):
             symptomatic_recovery = gamma_i_2 * y[vac_group_states_index['I_2']]
             hospital_recovery = psi * y[vac_group_states_index['H']]
             # hospitalisation
-            hospitalisation = (1 - self.ve_hospitalisation[vacination_group]) * eta * y[vac_group_states_index['I_2']]
+            hospitalisation = (1 - self.ve_hospitalisation[vaccine_group]) * eta * y[vac_group_states_index['I_2']]
             # mortality
-            vac_group_symptomatic_mort = (1 - self.ve_mortality[vacination_group]) * mu
+            vac_group_symptomatic_mort = (1 - self.ve_mortality[vaccine_group]) * mu
             symptomatic_mortality = vac_group_symptomatic_mort * y[vac_group_states_index['I_2']]
             hospital_mortality = vac_group_symptomatic_mort * y[vac_group_states_index['H']]
             # natural wanning imunity
