@@ -34,39 +34,46 @@ from CVM_models.mass_gathering_piecewise_vaccination import MassGatheringModel
 # These are available at https://docs.google.com/spreadsheets/d/1_XQn8bfPXKA8r1D_rz6Y1LeMTR_Y0RK5Rh4vnxDcQSo/edit?usp=sharing
 # These are placed in a list corresponding to the order of vaccination groups (enter MassGatheringModel.vaccination_groups)
 # For now we will assume that the 3rd dose is effective as the 2nd dose before wanning immunity.
-ve_infection = {
+ve_dict = {}
+ve_dict['ve_infection'] = {
     'unvaccinated': 0, 
-    'first_dose_non_effective': 0,
-    'first_dose_effective': 0.634,
-    'second_dose_non_effective': 0.634,
-    'second_dose_effective': 0.7443333333,
+    'first_dose_delay': 0,
+    'first_dose': 0.634,
+    'second_dose_delay': 0.634,
+    'second_dose': 0.7443333333,
     'second_dose_waned': 0.2446666667,
-    'third_dose_non_effective': 0.2446666667,
-    'third_dose_effective': 0.7443333333}
-ve_symptoms = {
+    'third_dose_delay': 0.2446666667,
+    'third_dose': 0.7443333333}
+ve_dict['ve_symptoms'] = {
     'unvaccinated': 0,
-    'first_dose_non_effective': 0,
-    'first_dose_effective': 0.479,
-    'second_dose_non_effective': 0.479,
-    'second_dose_effective': 0.7486666667,
+    'first_dose_delay': 0,
+    'first_dose': 0.479,
+    'second_dose_delay': 0.479,
+    'second_dose': 0.7486666667,
     'second_dose_waned': 0.274,
-    'third_dose_non_effective': 0.274,
-    'third_dose_effective': 0.7486666667}
-ve_hospitalisation = {
+    'third_dose_delay': 0.274,
+    'third_dose': 0.7486666667}
+ve_dict['ve_hospitalisation'] = {
     'unvaccinated': 0,
-    'first_dose_non_effective': 0,
-    'first_dose_effective': 0.661,
-    'second_dose_non_effective': 0.661,
-    'second_dose_effective': 0.957,
+    'first_dose_delay': 0,
+    'first_dose': 0.661,
+    'second_dose_delay': 0.661,
+    'second_dose': 0.957,
     'second_dose_waned': 0.815,
-    'third_dose_non_effective': 0.815,
-    'third_dose_effective': 0.957}
+    'third_dose_delay': 0.815,
+    'third_dose': 0.957}
 # assume that VE against hospitalisation and death are the same.
-ve_mortality = copy.deepcopy(ve_hospitalisation)
+ve_dict['ve_mortality'] = copy.deepcopy(ve_dict['ve_hospitalisation'])
 
 #%%
 # Initialise model
-model = MassGatheringModel(first_vac_dose, second_vac_dose, third_vac_dose, ve_infection, ve_symptoms, ve_hospitalisation, ve_mortality)
+# Ontario’s population reached 14,755,211 on January 1, 2021
+# https://www.ontario.ca/page/ontario-demographic-quarterly-highlights-fourth-quarter-2020#:~:text=Ontario’s%20population%20reached%2014%2C755%2C211%20on,quarter%20of%20the%20previous%20year..
+starting_population = 14755211
+groups_loss_via_vaccination = {'unvaccinated': first_vac_dose,
+                               'first_dose': second_vac_dose,
+                               'second_dose': third_vac_dose}
+model = MassGatheringModel(starting_population,groups_loss_via_vaccination, ve_dict)
 
 
 
@@ -111,16 +118,13 @@ parameters = (
 #%%
 # Create Test population lets assume no infections prior to vaccination program and 10 infected arrive.
 y0 = np.zeros(model.num_states)
-# Ontario’s population reached 14,755,211 on January 1, 2021
-# https://www.ontario.ca/page/ontario-demographic-quarterly-highlights-fourth-quarter-2020#:~:text=Ontario’s%20population%20reached%2014%2C755%2C211%20on,quarter%20of%20the%20previous%20year..
-N = 14755211
 infection_seed = 1
-y0[0] = N-infection_seed
+y0[0] = starting_population-infection_seed
 y0[1] = infection_seed
+t = range(len(vac_data.previous_day_at_least_one)-5)
 
 #%%
 # Runninng model
-t = range(len(vac_data.previous_day_at_least_one)-5)
 sol = odeint(model.ode, y0, t, args=parameters)
 
 #%%
@@ -162,15 +166,15 @@ plot, axes = plt.subplots(4, 1, sharex=True)
 plt.xticks(rotation=45)
 axes[0].plot(sol_vaccination_totals.index, sol_vaccination_totals.unvaccinated,color='black')
 axes[0].scatter(data_df.report_date,data_df.unvaccinated,color='red')
-axes[1].plot(sol_vaccination_totals.index, sol_vaccination_totals[['first_dose_non_effective',
-                                                       'first_dose_effective']].sum(axis=1),color='black')
+axes[1].plot(sol_vaccination_totals.index, sol_vaccination_totals[['first_dose_delay',
+                                                       'first_dose']].sum(axis=1),color='black')
 axes[1].scatter(data_df.report_date,data_df.total_individuals_partially_vaccinated,color='yellow')
-axes[2].plot(sol_vaccination_totals.index, sol_vaccination_totals[['second_dose_non_effective',
-                                                       'second_dose_effective',
+axes[2].plot(sol_vaccination_totals.index, sol_vaccination_totals[['second_dose_delay',
+                                                       'second_dose',
                                                        'second_dose_waned']].sum(axis=1),color='black')
 axes[2].scatter(data_df.report_date,data_df.total_individuals_fully_vaccinated,color='blue')
-axes[3].plot(sol_vaccination_totals.index, sol_vaccination_totals[['third_dose_non_effective',
-                                                       'third_dose_effective']].sum(axis=1),color='black')
+axes[3].plot(sol_vaccination_totals.index, sol_vaccination_totals[['third_dose_delay',
+                                                       'third_dose']].sum(axis=1),color='black')
 axes[3].scatter(data_df.report_date,data_df.total_individuals_3doses,color='green')
 plt.show()
 # In terms of progression through vaccination groups everything seems to work.

@@ -11,6 +11,9 @@ from CVM_models.base_piecewise_vaccination import BaseSingleClusterVacModel
 
 
 class MassGatheringModel(BaseSingleClusterVacModel):
+    core_vaccine_groups = ['unvaccinated', 'first_dose', 'second_dose', 'third_dose']
+    ve_delay_groups = ['first_dose', 'second_dose', 'third_dose']
+    ve_wanning_groups = ['second_dose']
     states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'H', 'D', 'R']
     dead_states = ['D']
     vaccinable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'R']
@@ -38,7 +41,7 @@ class MassGatheringModel(BaseSingleClusterVacModel):
             ):
         foi = self.foi(y, beta, asymptomatic_tran_mod)
         y_deltas = np.zeros(self.num_states)
-        for vaccine_group in self.vaccination_groups:
+        for vaccine_group in self.vaccine_groups:
             self.vac_group_transfer(y, y_deltas, t, inverse_effective_delay, inverse_waning_immunity, vaccine_group)
             vac_group_states_index = self.state_index[vaccine_group]
             # Infections

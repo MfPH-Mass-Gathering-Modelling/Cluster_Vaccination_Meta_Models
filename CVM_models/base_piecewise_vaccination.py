@@ -10,21 +10,10 @@ import pandas as pd
 
 
 class BaseSingleClusterVacModel:
-    vaccine_groups = [
-        'unvaccinated',
-        'first_dose_non_effective',
-        'first_dose_effective',
-        'second_dose_non_effective',
-        'second_dose_effective',
-        'second_dose_waned',
-        'third_dose_non_effective',
-        'third_dose_effective'
-    ]
-
-    groups_waiting_for_vaccine_effectiveness = ['first_dose_non_effective', 'second_dose_non_effective',
-                                                'third_dose_non_effective']
-    groups_experiencing_waned_ve = ['second_dose_effective']
-    groups_with_waned_immunity = ['second_dose_waned']
+    core_vaccine_groups = []
+    ve_delay_groups = []
+    ve_wanning_groups = []
+    groups_waiting_for_vaccine_effectiveness = []
     states = []
     dead_states = []
     vaccinable_states = []
@@ -33,37 +22,47 @@ class BaseSingleClusterVacModel:
     symptomatic_states = []
 
     def __init__(self, starting_population,
-                 first_vac_dose, second_vac_dose, third_vac_dose,
-                 ve_infection, ve_symptoms, ve_hospitalisation, ve_mortality):
+                 groups_loss_via_vaccination,
+                 ve_dicts):
         self.starting_population = starting_population
-        if isinstance(first_vac_dose, pd.Series):
-            first_vac_dose = first_vac_dose.tolist()
-        if isinstance(second_vac_dose, pd.Series):
-            second_vac_dose = second_vac_dose.tolist()
-        if isinstance(third_vac_dose, pd.Series):
-            third_vac_dose = third_vac_dose.tolist()
-        self.groups_loss_via_vaccination = {
-            'unvaccinated': first_vac_dose,
-            'first_dose_effective': second_vac_dose,
-            'second_dose_waned': third_vac_dose
-        }
+        self.vaccine_groups = []
+        for vaccine_group in self.core_vaccine_groups:
+            if vaccine_group in self.ve_delay_groups:
+                self.vaccine_groups.append(vaccine_group+'_delay')
+                self.groups_waiting_for_vaccine_effectiveness.append(vaccine_group+'_delay')
+            self.vaccine_groups.append(vaccine_group)
+            if vaccine_group in self.ve_wanning_groups:
+                self.vaccine_groups.append(vaccine_group + '_waned')
+        groups_loss_via_vaccination_conv = {}
+        for key, value in groups_loss_via_vaccination.items():
+            if isinstance(value, pd.Series):
+                new_value = value.tolist()
+            else:
+                new_value = value
+            if key in self.ve_wanning_groups:
+                new_key = key + '_waned'
+            else:
+                new_key = key
+            groups_loss_via_vaccination_conv[new_key] = new_value
+        self.groups_loss_via_vaccination = groups_loss_via_vaccination_conv
+        self.derived_vaccination_rates = {key:{} for key in self.groups_loss_via_vaccination.keys()}
         self._sorting_states()
-        self._attaching_ve_dicts(ve_infection, ve_symptoms, ve_hospitalisation, ve_mortality)
+        self._attaching_ve_dicts(ve_dicts)
 
-    def _attaching_ve_dicts(self, ve_infection, ve_symptoms, ve_hospitalisation, ve_mortality):
-        for name, var in vars().items():
-            if name != "self":
-                error_msg_end = name + ' should be a dictionary with keys being the same as the names of the vaccine groups and values being a float or int >=0 and <=1.'
-                if not isinstance(var, dict):
-                    raise TypeError(name + ' is not a dictionary. ' + error_msg_end)
-                if set(var.keys()) != set(self.vaccine_groups):
-                    raise ValueError(name + "'s keys are not in the list: " + ', '.join(self.vaccine_groups) +
-                                     ". " + error_msg_end)
-                if not all([isinstance(item, (float, int)) for item in var.values()]):
-                    raise TypeError(name + ' values are not floats or ints. ' + error_msg_end)
-                if not all([0 <= item <= 1 for item in var.values()]):
-                    raise ValueError(name + ' values are not >=0 and <=1. ' + error_msg_end)
-                setattr(self, name, var)
+
+    def _attaching_ve_dicts(self, ve_dicts):
+        for name, var in ve_dicts.items():
+            error_msg_end = name + ' should be a dictionary with keys being the same as the names of the vaccine groups and values being a float or int >=0 and <=1.'
+            if not isinstance(var, dict):
+                raise TypeError(name + ' is not a dictionary. ' + error_msg_end)
+            if set(var.keys()) != set(self.vaccine_groups):
+                raise ValueError(name + "'s keys are not in the list: " + ', '.join(self.vaccine_groups) +
+                                 ". " + error_msg_end)
+            if not all([isinstance(item, (float, int)) for item in var.values()]):
+                raise TypeError(name + ' values are not floats or ints. ' + error_msg_end)
+            if not all([0 <= item <= 1 for item in var.values()]):
+                raise ValueError(name + ' values are not >=0 and <=1. ' + error_msg_end)
+            setattr(self, name, var)
 
     def _sorting_states(self):
         self.infectious_and_symptomatic_states = [state for state in self.infectious_states
@@ -73,11 +72,13 @@ class BaseSingleClusterVacModel:
         self.state_index = {}
         self.infectious_symptomatic_index = {}
         self.infectious_asymptomatic_index = {}
+        self.vaccinable_states_index ={}
         self.dead_states_index = {}
         # populating index dictionaries
         index = 0
         for vaccine_group in self.vaccine_groups:
             self.dead_states_index[vaccine_group] = {}
+            self.vaccinable_states_index[vaccine_group] = {}
             self.state_index[vaccine_group] = {}
             self.infectious_symptomatic_index[vaccine_group] = {}
             self.infectious_asymptomatic_index[vaccine_group] = {}
@@ -89,6 +90,8 @@ class BaseSingleClusterVacModel:
                     self.infectious_asymptomatic_index[vaccine_group][state] = index
                 if state in self.dead_states:
                     self.dead_states_index[vaccine_group][state] = index
+                if state in self.vaccinable_states:
+                    self.vaccinable_states_index[vaccine_group][state] = index
                 index += 1
 
         self.state_index['observed_states'] = {}
@@ -97,6 +100,9 @@ class BaseSingleClusterVacModel:
             index += 1
 
         self.num_states = index
+
+    def _nesteddictvalues(self, d):
+        return [index for sub_d in d.values() for index in sub_d.values()]
 
     def foi(self, y, beta, asymptomatic_tran_mod):
         """Calculate force of infection (foi).
@@ -140,8 +146,6 @@ class BaseSingleClusterVacModel:
             ans = np.log(growth)
         return ans
 
-    def _nesteddictvalues(self, d):
-        return [index for sub_d in d.values() for index in sub_d.values()]
 
     def vac_group_transfer(self, y, y_deltas, t,
                            inverse_effective_delay,
@@ -162,41 +166,28 @@ class BaseSingleClusterVacModel:
             # Lets deal with vaccinations first
             ## Then the groups being transfered to the next vaccination group
             if vaccine_group in self.groups_loss_via_vaccination.keys():
-                index_of_target_loss = int(t) + 1
-                total_loss_via_vaccination = self.groups_loss_via_vaccination[vaccine_group][index_of_target_loss]
-                if total_loss_via_vaccination == 0:  # No point in calculations if no one is being vaccinated.
-                    vaccine_group_transfer = {state: 0 for state in self.vaccinable_states}
-                else:
-                    total_vaccinable = 0
-                    for state in self.vaccinable_states:
-                        total_vaccinable += y[vac_group_states_index[state]]
-                    vaccinable_populations = {state: y[vac_group_states_index[state]] for state in
-                                              self.vaccinable_states}
-                    vaccinable_propostions = {state: y[vac_group_states_index[state]] / total_vaccinable
-                                              for state in self.vaccinable_states}
-                    vaccine_group_transfer = {}
-                    for state, population in vaccinable_populations.items():
-                        proportion = vaccinable_propostions[state]
-                        target_vaccination = total_loss_via_vaccination * proportion
-                        if target_vaccination > population:
-                            err_msg = ('Target vaccination population (' + str(target_vaccination) +
-                                       ') > population ' + str(population) +
-                                       ' of state "' + state +
-                                       '" for vaccination group "' +
-                                       vaccine_group + '" at time ' + str(t) + '.')
-                            raise ValueError(err_msg)
-
-                        inst_loss_via_vaccine = self.instantaneous_transfer(target_vaccination, population, t)
-                        vaccine_group_transfer[state] = np.nan_to_num(population * (1 - np.exp(inst_loss_via_vaccine)))
+                derived_vaccination_rates = self.derived_vaccination_rates[vaccine_group]
+                if t not in derived_vaccination_rates.keys():
+                    index_of_target_loss = int(t) + 1
+                    total_loss_via_vaccination = self.groups_loss_via_vaccination[vaccine_group][index_of_target_loss]
+                    if total_loss_via_vaccination == 0:  # No point in calculations if no one is being vaccinated.
+                        derived_vaccination_rates[t] = 0
+                    else:
+                        vaccinable_states_index = list(self.vaccinable_states_index[vaccine_group].values())
+                        total_vaccinable = y[vaccinable_states_index].sum()
+                        inst_loss_via_vaccine = self.instantaneous_transfer(total_loss_via_vaccination, total_vaccinable, t)
+                        derived_vaccination_rates[t] = 1 - np.exp(inst_loss_via_vaccine)
+                vaccine_group_transfer = {state: derived_vaccination_rates[t] * y[vac_group_states_index[state]]
+                                          for state in self.vaccinable_states}
             elif vaccine_group in self.groups_waiting_for_vaccine_effectiveness:
                 vaccine_group_transfer = {state: inverse_effective_delay * y[vac_group_states_index[state]]
                                           for state in self.vaccinable_states}
-            elif vaccine_group in self.groups_experiencing_waned_ve:
+            elif vaccine_group in self.ve_wanning_groups:
                 vaccine_group_transfer = {state: inverse_waning_immunity * y[vac_group_states_index[state]]
                                           for state in self.vaccinable_states}
             else:
                 raise ValueError(
-                    'vaccine_group "' + vaccine_group + '" has no method of transfer to next vaccination group' +
+                    'vaccine_group "' + vaccine_group + '" has no method of transfer to next vaccination group ' +
                     'and is not the last vaccination group "' + self.vaccine_groups[-1] + '".')
 
             for state, transfering_pop in vaccine_group_transfer.items():

@@ -11,6 +11,9 @@ from CVM_models.base_fixed_vaccination import BaseMultiClusterVacConstructor
 
 
 class MGModelConstructor(BaseMultiClusterVacConstructor):
+    core_vaccine_groups = ['unvaccinated', 'first_dose', 'second_dose', 'third_dose']
+    ve_delay_groups = ['first_dose', 'second_dose', 'third_dose']
+    ve_wanning_groups = ['second_dose']
     states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'H', 'D', 'R']
     dead_states = ['D']
     vaccinable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'R']

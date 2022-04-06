@@ -16,16 +16,16 @@ from CVM_models.mass_gathering_fixed_vaccination import MGModelConstructor
 
 #%%
 # Create constructor
-clusters = ['1']
+clusters = ['']
 vaccine_groups = [
     'unvaccinated',
-    # 'first_dose_non_effective',
-    'first'#,
-#     'second_dose_non_effective',
-#     'second_dose_effective',
-#     'second_dose_waned',
-#     'third_dose_non_effective',
-#     'third_dose_effective'
+    'first_dose_non_effective',
+    'first_dose_effective',
+    'second_dose_non_effective',
+    'second_dose_effective',
+    'second_dose_waned',
+    'third_dose_non_effective',
+    'third_dose_effective'
 ]
 
 single_cluster_constor = MGModelConstructor(clusters, vaccine_groups)
@@ -50,7 +50,7 @@ print(single_cluster_constor.all_states)
 
 #%%
 
-f_of_index = single_cluster_constor.all_states.index('S_1_unvaccinated')
-x_of_index =single_cluster_constor.all_states.index('A_1_1_first')
+f_of_index = single_cluster_constor.all_states.index('S__first_dose_non_effective')
+x_of_index =single_cluster_constor.all_states.index('S__unvaccinated')
 test = jacobian[f_of_index,x_of_index]
 print(test)
