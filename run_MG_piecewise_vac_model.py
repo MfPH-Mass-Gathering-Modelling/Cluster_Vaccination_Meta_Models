@@ -79,7 +79,7 @@ model = MassGatheringModel(starting_population,groups_loss_via_vaccination, ve_d
 
 # %%
 # Test parameter values
-beta = 0.5 # 1.759782 may conform to Ontario's 1st wave see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8454019/pdf/CCDR-47-329.pdf
+beta = 1.759782  # may conform to Ontario's 1st wave see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8454019/pdf/CCDR-47-329.pdf
 asymptomatic_tran_mod = 0.342
 inverse_effective_delay = 1/14
 inverse_waning_immunity =1/84
