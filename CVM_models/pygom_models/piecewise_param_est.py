@@ -9,28 +9,43 @@ from pygom import DeterministicOde
 import pandas as pd
 import numpy as np
 from numbers import Number
+import warnings
 
 
 class PiecewiseParamEstODE(DeterministicOde):
-    peicewise_param_estimates = {}
     def __init__(self,
                  state=None,
                  param=None,
                  derived_param=None,
                  transition=None,
                  birth_death=None,
-                 ode=None,
-                 piecewise_params=None):
+                 ode=None):
+        self._piecewise_params = None
+        self._fixed_params = None
+        self.peicewise_param_estimates = {}
+        super().__init__(state, param, derived_param, transition, birth_death, ode)
+
+    @property
+    def piecwise_params(self):
+        return self._piecewise_params
+        
+    @piecwise_params.setter
+    def piecwise_params(self, piecewise_params):
         for param, sub_dict in piecewise_params.items():
+            if param not in self._paramDict.keys():
+                raise ValueError(str(param) + ' is not one of the symbols used in the list of parameters' +
+                                 ' used to initialise the instance of this class. One of ' +
+                                 ','.join(self._paramDict.keys())+'.')
+
             targets = sub_dict['targets']
             if isinstance(targets, pd.Series):
                 piecewise_params[param]['targets'] = targets.tolist()
             source_states = sub_dict['source states']
-            piecewise_params[param]['index of sources'] = [state.index(source_state) for source_state in source_states]
+            piecewise_params[param]['index of sources'] = [self.get_state_index(source_state)
+                                                           for source_state in source_states]
             piecewise_params[param]['estimates'] = {}
-        self.piecewise_params = piecewise_params
-        self.param_symbols = param
-        super().__init__(state, param, derived_param, transition, birth_death, ode)
+        self._piecewise_params = piecewise_params
+
 
     @property
     def fixed_parameters(self):
@@ -49,31 +64,51 @@ class PiecewiseParamEstODE(DeterministicOde):
         if not isinstance(fixed_parameters,dict):
             raise TypeError('fixed_parameters should be a dictionary.')
         for key, value in fixed_parameters.items():
-            if key not in self.param_symbols:
+            if key not in self._paramDict.keys():
                 raise ValueError(str(key) + ' is not one of the symbols used in the list of parameters' +
-                                 ' used to initialise the instance of this class.')
+                                 ' used to initialise the instance of this class. One of ' +
+                                 ','.join(self._paramDict.keys())+'.')
             if not isinstance(value, Number):
                 raise TypeError(str(value) + 'is not a number type.')
         self._fixed_params = fixed_parameters
 
     def eval_jacobian(self, time, state):
-        self.estimate_params_piecewise(time, state)
-        return super().eval_jacobian(time=time, state=state)
+        if self._Jacobian is None or self._hasNewTransition.Jacobian:
+            # self.get_ode_eqn()
+            self.get_jacobian_eqn()
+        paramValue = self.estimate_params_piecewise(time, state)
+        eval_param = self._getEvalParam(state=state,time=time, parameters=paramValue)
+        return self._JacobianCompile(eval_param)
 
     def eval_ode(self, time, state):
-        self.estimate_params_piecewise(time, state)
-        return super().eval_ode(time=time, state=state)
+        if self._ode is None or self._hasNewTransition.ode:
+            self.get_ode_eqn()
+        paramValue = self.estimate_params_piecewise(time, state)
+        eval_param = self._getEvalParam(state=state,time=time, parameters=paramValue)
+        return self._odeCompile(eval_param)
 
-    def instantaneous_transfer(self, population_transitioning, population, t=None):
+    def instantaneous_transfer(self,
+                               population_transitioning,
+                               population,
+                               t=None,
+                               source_states=None):
         if population_transitioning > population:
             error_msg = "population_transitioning (" + str(
                 population_transitioning) + ") is greater than population (" + str(population)
-            if t is None:
-                error_msg += ').'
+            if source_states is None:
+                error_msg += ')'
             else:
-                error_msg += '), at time ' + str(t) + ').'
-
-            raise ValueError(error_msg)
+                error_msg += ', between states ' + ','.join(source_states) + ')'
+            if t is None:
+                error_msg += '.'
+            else:
+                error_msg += ', at time ' + str(t) + ').'
+            if self._not_enough_to_transition_raises_warning:
+                error_msg += ' Transitioning the total population available.'
+                warnings.warn(error_msg)
+                population_transitioning = 0
+            else:
+                raise ValueError(error_msg)
         numerator = population - population_transitioning
         denominator = population
         # growth should be 1, even if denominator and numerator are 0 and the natural log of 1 is 0 therefore.
@@ -86,20 +121,105 @@ class PiecewiseParamEstODE(DeterministicOde):
         return ans
 
     def estimate_params_piecewise(self, time, state):
+        if self._piecewise_params is None:
+            AssertionError('piecewise_params dictionary has not been set.' +
+                           ' To set call "the instance of this class".piecewise_params = "your chosen piecewise_params dictionary".')
+        if self._fixed_params is None:
+            AssertionError('fixed_params dictionary has not been set.' +
+                           ' To set call "the instance of this class".fixed_params = "your chosen fixed_params dictionary."')
         piecewise_estimates_at_t = {}
-        for param, sub_dict in self.piecewise_params.items():
+        for param, sub_dict in self._piecewise_params.items():
             target = sub_dict['targets'][int(time) + 1]
             if target == 0:
                 estimated_param = 0
             else:
                 index_sources = sub_dict['index of sources']
+                source_states = sub_dict['source states']
                 estimates = sub_dict['estimates']
-                total_source = state[index_sources].sum()
+                total_source = np.take(state, index_sources, axis=0).sum()
                 if time not in estimates.keys() or total_source not in estimates[time].keys():
-                    instantaneous_transfer = self.instantaneous_transfer(target, total_source, time)
+                    if time not in estimates.keys():
+                        self._piecewise_params[param]['estimates'][time] = {}
+                    instantaneous_transfer = self.instantaneous_transfer(target, total_source, time, source_states)
                     estimated_param = 1 - np.exp(instantaneous_transfer)
-                    self.piecewise_params[param]['estimates'][time][total_source] = estimated_param
+                    self._piecewise_params[param]['estimates'][time][total_source] = estimated_param
                 else:
                     estimated_param = estimates[time][total_source]
             piecewise_estimates_at_t[param] = estimated_param
-        self.parameters = {**self.fixed_params, **piecewise_estimates_at_t}
+
+        temp_params_dict = {**self._fixed_params, **piecewise_estimates_at_t}
+        paramValue = [0]*self.num_param
+        for key, val in temp_params_dict.items():
+            index = self.get_param_index(key)
+            paramValue[index] = val
+
+        return paramValue
+
+    def integrate(self, t, full_output=False, not_enough_to_transition_raises_warning=True):
+        '''
+        Integrate over a range of t when t is an array and a output at time t
+
+        Parameters
+        ----------
+        t: array like
+            the range of time points which we want to see the result of
+        full_output: bool
+            if we want additional information
+        not_enough_to_transition_raises_warning : bool
+            If true during piecewise if the target is greater than the source
+             population the total population is transitioned. If false an
+             error is raised.
+        
+        '''
+        self._not_enough_to_transition_raises_warning = not_enough_to_transition_raises_warning
+        return super().integrate(t, full_output)
+    
+    def integrate2(self, t, full_output=False, method=None,
+                   not_enough_to_transition_raises_warning=True):
+        '''
+        Integrate over a range of t when t is an array and a output
+        at time t.  Select a suitable method to integrate when
+        method is None.
+
+        Parameters
+        ----------
+        t: array like
+            the range of time points which we want to see the result of
+        full_output: bool
+            if we want additional information
+        method: str, optional
+            the integration method.  All those available in
+            :class:`ode <scipy.integrate.ode>` are allowed with 'vode'
+            and 'ivode' representing the non-stiff and stiff version
+            respectively.  Defaults to None, which tries to choose the
+            integration method via eigenvalue analysis (only one) using
+            the initial conditions
+        not_enough_to_transition_raises_warning : bool
+            If true during piecewise if the target is greater than the source
+             population the total population is transitioned. If false an
+             error is raised.
+        '''
+        self._not_enough_to_transition_raises_warning = not_enough_to_transition_raises_warning
+        return super().integrate2(t, full_output, method)
+
+    def _getEvalParam(self, state, time, parameters):
+        if state is None or time is None:
+            raise AssertionError("Have to input both state and time")
+
+        if parameters is not None:
+            paramValue = parameters
+        elif self._parameters is None:
+            if self.num_param == 0:
+                pass
+            else:
+                raise AssertionError("Have not set the parameters yet or given them.")
+            paramValue = self.paramValue
+
+        if isinstance(state, list):
+            eval_param = state + [time]
+        elif hasattr(state, '__iter__'):
+            eval_param = list(state) + [time]
+        else:
+            eval_param = [state] + [time]
+
+        return eval_param + paramValue

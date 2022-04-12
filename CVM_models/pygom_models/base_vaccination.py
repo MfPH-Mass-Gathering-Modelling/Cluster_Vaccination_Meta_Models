@@ -7,7 +7,7 @@ Description:
 """
 import copy
 from pygom import TransitionType, Transition, DeterministicOde, SimulateOde
-
+from CVM_models.pygom_models.piecewise_param_est import PiecewiseParamEstODE
 
 class BaseMultiClusterVacConstructor:
     beta_list = []
@@ -18,8 +18,8 @@ class BaseMultiClusterVacConstructor:
     transitions = []
     bd_list = []
     derived_params = []
-    states = []
-    vaccinable_states = []
+    states = ['S']
+    vaccinable_states = ['S']
     infectious_states = []
     symptomatic_states = []
     dead_states = []
@@ -29,6 +29,7 @@ class BaseMultiClusterVacConstructor:
     vaccine_and_cluster_specific_params = ['nu']
     stoc_model = None
     det_model = None
+    piecewise_param_est_model = None
 
     def __init__(self, clusters, vaccine_groups):
         self.infectious_and_symptomatic_states = [state for state in self.infectious_states
@@ -64,11 +65,15 @@ class BaseMultiClusterVacConstructor:
                         dead_pop.append(state_in_cluster)
 
             self.cluster_dead_population[cluster_i] = '+'.join(dead_pop)
-        # setting up forces of infection
-        self.append_semetric_transmission_from_list(self.clusters)
-        self.derived_params = [('lambda_' + cluster_i, '+'.join(self.lambda_dict[cluster_i]))
-                               for cluster_i in self.clusters]
         self._append_vaccination_group_transitions()
+        # setting up forces of infection if you have infectious states
+        if len(self.infectious_states) > 0:
+            self.append_semetric_transmission_from_list(self.clusters)
+            self.derived_params = [('lambda_' + cluster_i, '+'.join(self.lambda_dict[cluster_i]))
+                                   for cluster_i in self.clusters]
+
+        self.attach_all_params_list()
+
 
     # functions for appending to dictionary of lambdas and list of betas
     def append_transmission(self, cluster_i, cluster_j):
@@ -157,10 +162,10 @@ class BaseMultiClusterVacConstructor:
             for list_item in specific_params_dict.values():
                 self.all_parameters += list_item
 
-    def generate_model(self, stochastic=False):
+    def generate_model(self, variety='deterministic'):
         """Generate pygom based model.
         """
-        if stochastic:
+        if variety=='stochastic':
             if self.stoc_model is None:
                 self.stoc_model = SimulateOde(self.all_states,
                                               self.all_parameters,
@@ -168,7 +173,7 @@ class BaseMultiClusterVacConstructor:
                                               transition=self.transitions,
                                               birth_death=self.bd_list)
             model = copy.deepcopy(self.stoc_model)
-        else:
+        elif variety=='deterministic':
             if self.det_model is None:
                 self.det_model = DeterministicOde(self.all_states,
                                                   self.all_parameters,
@@ -176,5 +181,14 @@ class BaseMultiClusterVacConstructor:
                                                   transition=self.transitions,
                                                   birth_death=self.bd_list)
             model = copy.deepcopy(self.det_model)
+        elif variety=='piecewise parameter estimation':
+            if self.piecewise_param_est_model is None:
+                self.piecewise_param_est_model = PiecewiseParamEstODE(self.all_states,
+                                                                      self.all_parameters,
+                                                                      derived_param=self.derived_params,
+                                                                      transition=self.transitions,
+                                                                      birth_death=self.bd_list)
+            model = copy.deepcopy(self.piecewise_param_est_model)
+
 
         return model

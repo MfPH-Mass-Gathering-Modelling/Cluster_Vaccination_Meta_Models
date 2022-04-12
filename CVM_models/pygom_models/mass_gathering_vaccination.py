@@ -7,7 +7,7 @@ Description:
 """
 import copy
 from pygom import TransitionType, Transition
-from CVM_models.base_fixed_vaccination import BaseMultiClusterVacConstructor
+from CVM_models.pygom_models.base_vaccination import BaseMultiClusterVacConstructor
 
 
 class MGModelConstructor(BaseMultiClusterVacConstructor):
