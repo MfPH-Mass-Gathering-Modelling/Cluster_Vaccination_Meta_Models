@@ -10,14 +10,6 @@ from pygom import TransitionType, Transition, DeterministicOde, SimulateOde
 from CVM_models.pygom_models.piecewise_param_est import PiecewiseParamEstODE
 
 class BaseMultiClusterVacConstructor:
-    beta_list = []
-    lambda_dict = {}
-    transmission_combos = []
-    all_states = []
-    all_parameters = []
-    transitions = []
-    bd_list = []
-    derived_params = []
     states = ['S']
     vaccinable_states = ['S']
     infectious_states = []
@@ -27,11 +19,19 @@ class BaseMultiClusterVacConstructor:
     vaccine_specific_params = []
     cluster_specific_params = ['N']
     vaccine_and_cluster_specific_params = ['nu']
-    stoc_model = None
-    det_model = None
-    piecewise_param_est_model = None
+
 
     def __init__(self, clusters, vaccine_groups):
+        self.stoc_model = None
+        self.det_model = None
+        self.piecewise_param_est_model = None
+        self.all_parameters = None
+        self.beta_list = []
+        self.lambda_dict = {}
+        self.transmission_combos = []
+        self.transitions = []
+        self.bd_list = []
+        self.derived_params = []
         self.infectious_and_symptomatic_states = [state for state in self.infectious_states
                                                   if state in self.symptomatic_states]
         self.infectious_and_asymptomatic_states = [state for state in self.infectious_states
@@ -54,13 +54,20 @@ class BaseMultiClusterVacConstructor:
         self.states_dict = {state: [] for state in self.states}
         # Setting up clusters
         self.cluster_dead_population = {}
+        self.cluste_vaccine_group_state_index = {}
+        index = 0
+        self.all_states = []
         for cluster_i in self.clusters:
             dead_pop = []
+            self.cluste_vaccine_group_state_index[cluster_i] = {}
             for vaccine_group in self.vaccine_groups:
+                self.cluste_vaccine_group_state_index[cluster_i][vaccine_group] = {}
                 for state in self.states:
+                    self.self.cluste_vaccine_group_state_index[cluster_i][vaccine_group][state] = index
+                    index += 1
                     state_in_cluster = state + "_" + cluster_i + "_" + vaccine_group
-                    self.all_states.append(state_in_cluster)
                     self.states_dict[state].append(state_in_cluster)
+                    self.all_states.append(state_in_cluster)
                     if state in self.dead_states:
                         dead_pop.append(state_in_cluster)
 
@@ -72,8 +79,17 @@ class BaseMultiClusterVacConstructor:
             self.derived_params = [('lambda_' + cluster_i, '+'.join(self.lambda_dict[cluster_i]))
                                    for cluster_i in self.clusters]
 
-        self.attach_all_params_list()
 
+    def _attach_Params(self):
+        self.all_parameters = self.non_specific_params + self.beta_list
+        dictionary_list = [
+            self.vaccine_specific_params_dict,
+            self.cluster_specific_params_dict,
+            self.vaccine_and_cluster_specific_params_dict
+        ]
+        for specific_params_dict in dictionary_list:
+            for list_item in specific_params_dict.values():
+                self.all_parameters += list_item
 
     # functions for appending to dictionary of lambdas and list of betas
     def append_transmission(self, cluster_i, cluster_j):
@@ -132,6 +148,7 @@ class BaseMultiClusterVacConstructor:
                 elif include_intra:
                     self.append_intra_transmission(cluster_i)
 
+
     def _append_vaccination_group_transitions(self):
         for vaccine_stage, vaccine_group in enumerate(self.vaccine_groups):
             for cluster in self.clusters:
@@ -148,23 +165,12 @@ class BaseMultiClusterVacConstructor:
                                                            transition_type=TransitionType.T)
                                                 )
 
-    def attach_all_params_list(self):
-        """
-        Create a list of all parameters and attach it.
-        """
-        self.all_parameters += self.non_specific_params + self.beta_list
-        dictionary_list = [
-            self.vaccine_specific_params_dict,
-            self.cluster_specific_params_dict,
-            self.vaccine_and_cluster_specific_params_dict
-        ]
-        for specific_params_dict in dictionary_list:
-            for list_item in specific_params_dict.values():
-                self.all_parameters += list_item
 
     def generate_model(self, variety='deterministic'):
         """Generate pygom based model.
         """
+        if self.all_parameters is None:
+            self._attach_Params()
         if variety=='stochastic':
             if self.stoc_model is None:
                 self.stoc_model = SimulateOde(self.all_states,

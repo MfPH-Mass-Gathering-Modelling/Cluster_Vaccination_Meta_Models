@@ -11,9 +11,6 @@ from CVM_models.pygom_models.base_vaccination import BaseMultiClusterVacConstruc
 
 
 class MGModelConstructor(BaseMultiClusterVacConstructor):
-    core_vaccine_groups = ['unvaccinated', 'first_dose', 'second_dose', 'third_dose']
-    ve_delay_groups = ['first_dose', 'second_dose', 'third_dose']
-    ve_wanning_groups = ['second_dose']
     states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'H', 'D', 'R']
     dead_states = ['D']
     vaccinable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'R']
@@ -22,7 +19,7 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
     non_specific_params = ['theta', 'epsilon_1', 'epsilon_2', 'epsilon_3',
                            'gamma_I_1', 'gamma_I_2', 'gamma_A_1', 'gamma_A_2',
                            'psi', 'rho']
-    cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['N', 'eta', 'mu']
+    cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['eta', 'mu']
     vaccine_specific_params = ['l', 'r', 'h', 'm']
 
     def __init__(self, clusters, vaccine_groups):
@@ -81,5 +78,3 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                     Transition(origin=H_i_v, destination=D_i_v, equation=mu_i + '*(1-' + m_v + ')*' + H_i_v,
                                transition_type=TransitionType.T)
                 ]
-
-        self.attach_all_params_list()
