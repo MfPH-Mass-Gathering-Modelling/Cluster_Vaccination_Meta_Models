@@ -63,7 +63,7 @@ class BaseMultiClusterVacConstructor:
             for vaccine_group in self.vaccine_groups:
                 self.cluste_vaccine_group_state_index[cluster_i][vaccine_group] = {}
                 for state in self.states:
-                    self.self.cluste_vaccine_group_state_index[cluster_i][vaccine_group][state] = index
+                    self.cluste_vaccine_group_state_index[cluster_i][vaccine_group][state] = index
                     index += 1
                     state_in_cluster = state + "_" + cluster_i + "_" + vaccine_group
                     self.states_dict[state].append(state_in_cluster)
@@ -72,6 +72,7 @@ class BaseMultiClusterVacConstructor:
                         dead_pop.append(state_in_cluster)
 
             self.cluster_dead_population[cluster_i] = '+'.join(dead_pop)
+        self.num_states = index
         self._append_vaccination_group_transitions()
         # setting up forces of infection if you have infectious states
         if len(self.infectious_states) > 0:

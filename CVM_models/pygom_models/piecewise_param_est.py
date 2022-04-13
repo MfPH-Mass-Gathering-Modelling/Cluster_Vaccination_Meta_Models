@@ -87,27 +87,40 @@ class PiecewiseParamEstODE(DeterministicOde):
         eval_param = self._getEvalParam(state=state,time=time, parameters=paramValue)
         return self._odeCompile(eval_param)
 
+    def entire_population_tranfered(self):
+        return self.lack_of_people_to_transition
+
     def instantaneous_transfer(self,
                                population_transitioning,
                                population,
                                t=None,
                                source_states=None):
         if population_transitioning > population:
-            error_msg = "population_transitioning (" + str(
-                population_transitioning) + ") is greater than population (" + str(population)
-            if source_states is None:
-                error_msg += ')'
-            else:
-                error_msg += ', between states ' + ','.join(source_states) + ')'
-            if t is None:
-                error_msg += '.'
-            else:
-                error_msg += ', at time ' + str(t) + ').'
             if self._not_enough_to_transition_raises_warning:
-                error_msg += ' Transitioning the total population available.'
-                warnings.warn(error_msg)
+                if not self.lack_of_people_to_transition:
+                    error_msg = ("Population transitioning is greater than available population." +
+                                 'Therefore transfering entire population'+
+                                 " Use method entire_population_tranfered to view details of when this happened.")
+                    warnings.warn(error_msg)
+                lack_of_people_to_transition_t = {'population transitioning': population_transitioning,
+                                                  'available population': population}
+                if source_states is not None:
+                    lack_of_people_to_transition_t.update({'source states': source_states})
+                if t is not None:
+                    lack_of_people_to_transition_t.update({'time': t})
+                self.lack_of_people_to_transition.append(lack_of_people_to_transition_t)
                 population_transitioning = 0
             else:
+                error_msg = "population_transitioning (" + str(
+                    population_transitioning) + ") is greater than population (" + str(population)
+                if source_states is None:
+                    error_msg += ')'
+                else:
+                    error_msg += ', between states ' + ','.join(source_states) + ')'
+                if t is None:
+                    error_msg += '.'
+                else:
+                    error_msg += ', at time ' + str(t) + ').'
                 raise ValueError(error_msg)
         numerator = population - population_transitioning
         denominator = population
@@ -172,6 +185,8 @@ class PiecewiseParamEstODE(DeterministicOde):
         
         '''
         self._not_enough_to_transition_raises_warning = not_enough_to_transition_raises_warning
+        if not_enough_to_transition_raises_warning:
+            self.lack_of_people_to_transition =[]
         return super().integrate(t, full_output)
     
     def integrate2(self, t, full_output=False, method=None,
@@ -200,6 +215,8 @@ class PiecewiseParamEstODE(DeterministicOde):
              error is raised.
         '''
         self._not_enough_to_transition_raises_warning = not_enough_to_transition_raises_warning
+        if not_enough_to_transition_raises_warning:
+            self.lack_of_people_to_transition =[]
         return super().integrate2(t, full_output, method)
 
     def _getEvalParam(self, state, time, parameters):

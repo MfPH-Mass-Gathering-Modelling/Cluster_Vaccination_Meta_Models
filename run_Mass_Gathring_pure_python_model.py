@@ -10,7 +10,6 @@ Description: Example code for running piecewise vaccination mass gathering model
 # import packages
 import pandas as pd
 import numpy as np
-from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 import seaborn as sns
 import copy
@@ -73,13 +72,13 @@ starting_population = 14755211
 groups_loss_via_vaccination = {'unvaccinated': first_vac_dose,
                                'first_dose': second_vac_dose,
                                'second_dose': third_vac_dose}
-model = MassGatheringModel(starting_population,groups_loss_via_vaccination, ve_dict)
+mg_model = MassGatheringModel(starting_population,groups_loss_via_vaccination, ve_dict)
 
 
 
 # %%
 # Test parameter values
-beta = 1.759782  # may conform to Ontario's 1st wave see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8454019/pdf/CCDR-47-329.pdf
+beta = 0.5  # may change conform to Ontario's 1st wave see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8454019/pdf/CCDR-47-329.pdf
 asymptomatic_tran_mod = 0.342
 inverse_effective_delay = 1/14
 inverse_waning_immunity =1/84
@@ -117,20 +116,20 @@ parameters = (
 
 #%%
 # Create Test population lets assume no infections prior to vaccination program and 10 infected arrive.
-y0 = np.zeros(model.num_states)
+y0 = np.zeros(mg_model.num_states)
 infection_seed = 1
 y0[0] = starting_population-infection_seed
 y0[1] = infection_seed
 t = range(len(vac_data.previous_day_at_least_one)-5)
 
 #%%
-# Runninng model
-sol = odeint(model.ode, y0, t, args=parameters)
+# Runninng mg_model
+sol = mg_model.integrate(y0, t, parameters)
 
 #%%
-# Checking model is working as it should.
+# Checking mg_model is working as it should.
 multi_columns = [(key_l1, key_l2)
-                 for key_l1, sub_dict in model.state_index.items()
+                 for key_l1, sub_dict in mg_model.state_index.items()
                  for key_l2 in sub_dict.keys()]
 
 sol_df = pd.DataFrame(sol, index=vac_data['report_date'][t].tolist())
@@ -186,7 +185,7 @@ sol_state_totals.drop(columns=['H_total','D_total'], inplace=True)
 plot, axes = plt.subplots(12, 1, sharex=True)
 plt.xticks(rotation=45)
 axes_index = 0
-for state in model.states:
+for state in mg_model.states:
     axes[axes_index].plot(sol_state_totals.index, sol_state_totals[state],color='black')
     axes_index += 1
 plt.show()

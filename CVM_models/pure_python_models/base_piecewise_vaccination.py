@@ -7,6 +7,7 @@ Description:
 """
 import numpy as np
 import pandas as pd
+import scipy
 
 
 class BaseSingleClusterVacModel:
@@ -195,4 +196,32 @@ class BaseSingleClusterVacModel:
                 y_deltas[next_vac_group_states_index[state]] += transfering_pop
 
 
+    def integrate(self, x0, t, params, full_output=False):
+        '''
+        A wrapper on top of :mod:`odeint <scipy.integrate.odeint>` using
+        :class:`DeterministicOde <pygom.model.DeterministicOde>`.
 
+        Parameters
+        ----------
+        t: array like
+            the time points including initial time
+        full_output: bool, optional
+            If the additional information from the integration is required
+
+        '''
+
+        # INTEGRATE!!! (shout it out loud, in Dalek voice)
+        # determine the number of output we want
+        solution, output = scipy.integrate.odeint(self.ode,
+                                                  x0, t, args=params,
+                                                  #Dfun=ode.jacobian, I have not figured out the jacobian for these models yet
+                                                  mu=None, ml=None,
+                                                  col_deriv=False,
+                                                  mxstep=10000,
+                                                  full_output=True)
+
+        if full_output == True:
+            # have both
+            return solution, output
+        else:
+            return solution
