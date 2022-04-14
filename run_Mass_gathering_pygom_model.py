@@ -153,6 +153,7 @@ index_S__unvaccinated = mg_model.get_state_index('S__unvaccinated')
 y0[index_S__unvaccinated] = starting_population-number_exposed
 index_E__unvaccinated = mg_model.get_state_index('E__unvaccinated')
 y0[index_E__unvaccinated] = number_exposed
+t = np.arange(len(vac_data.previous_day_at_least_one)-5)
 mg_model.initial_values = (y0, t[0])
 
 #%%
@@ -211,14 +212,14 @@ axes[3].scatter(data_df.report_date,data_df.total_individuals_3doses,color='gree
 plt.show()
 # In terms of progression through vaccination groups everything seems to work.
 
-#%%
-#Plotting graph of state totals
-sol_state_totals = sol_df.groupby(level=1,axis=1).sum()
-sol_state_totals.drop(columns=['H_total','D_total'], inplace=True)
-plot, axes = plt.subplots(12, 1, sharex=True)
-plt.xticks(rotation=45)
-axes_index = 0
-for state in mg_model.states:
-    axes[axes_index].plot(sol_state_totals.index, sol_state_totals[state],color='black')
-    axes_index += 1
-plt.show()
+# #%%
+# #Plotting graph of state totals
+# sol_state_totals = sol_df.groupby(level=1,axis=1).sum()
+# sol_state_totals.drop(columns=['H_total','D_total'], inplace=True)
+# plot, axes = plt.subplots(12, 1, sharex=True)
+# plt.xticks(rotation=45)
+# axes_index = 0
+# for state in mg_model.states:
+#     axes[axes_index].plot(sol_state_totals.index, sol_state_totals[state],color='black')
+#     axes_index += 1
+# plt.show()

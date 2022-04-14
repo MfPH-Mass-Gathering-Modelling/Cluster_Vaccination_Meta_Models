@@ -26,7 +26,7 @@ third_vac_dose = vac_data.previous_day_3doses
 
 # %%
 # import model
-from CVM_models.mass_gathering_piecewise_vaccination import MassGatheringModel
+from CVM_models.pure_python_models.mass_gathering_piecewise_vaccination import MassGatheringModel
 
 #%% 
 # Test parameter values - Vaccination parameters

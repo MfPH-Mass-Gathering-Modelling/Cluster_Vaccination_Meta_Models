@@ -29,8 +29,8 @@ class BaseSingleClusterVacModel:
         self.vaccine_groups = []
         for vaccine_group in self.core_vaccine_groups:
             if vaccine_group in self.ve_delay_groups:
-                self.vaccine_groups.append(vaccine_group+'_delay')
-                self.groups_waiting_for_vaccine_effectiveness.append(vaccine_group+'_delay')
+                self.vaccine_groups.append('delay_' + vaccine_group)
+                self.groups_waiting_for_vaccine_effectiveness.append('delay_' + vaccine_group)
             self.vaccine_groups.append(vaccine_group)
             if vaccine_group in self.ve_wanning_groups:
                 self.vaccine_groups.append(vaccine_group + '_waned')
@@ -46,7 +46,6 @@ class BaseSingleClusterVacModel:
                 new_key = key
             groups_loss_via_vaccination_conv[new_key] = new_value
         self.groups_loss_via_vaccination = groups_loss_via_vaccination_conv
-        self.derived_vaccination_rates = {key:{} for key in self.groups_loss_via_vaccination.keys()}
         self._sorting_states()
         self._attaching_ve_dicts(ve_dicts)
 
@@ -118,13 +117,16 @@ class BaseSingleClusterVacModel:
         """
         infectious_asymptomatic_index = self._nesteddictvalues(self.infectious_asymptomatic_index)
         infectious_symptomatic_index = self._nesteddictvalues(self.infectious_symptomatic_index)
-        dead_states_index = self._nesteddictvalues(self.dead_states_index)
         total_infectous_asymptomatic = y[infectious_asymptomatic_index].sum()
         total_infectous_symptomatic = y[infectious_symptomatic_index].sum()
-        total_contactable_population = self.starting_population - y[dead_states_index].sum()
+        total_contactable_population = self.current_population(y)
         foi = (beta * (asymptomatic_tran_mod * total_infectous_asymptomatic +
                        total_infectous_symptomatic) / total_contactable_population)
         return foi
+
+    def current_population(self, y):
+        dead_states_index = self._nesteddictvalues(self.dead_states_index)
+        return self.starting_population - y[dead_states_index].sum()
 
     def instantaneous_transfer(self, population_transitioning, population, t=None):
         if population_transitioning > population:
@@ -209,16 +211,24 @@ class BaseSingleClusterVacModel:
             If the additional information from the integration is required
 
         '''
-
+        self.derived_vaccination_rates = {key: {} for key in self.groups_loss_via_vaccination.keys()}
         # INTEGRATE!!! (shout it out loud, in Dalek voice)
         # determine the number of output we want
-        solution, output = scipy.integrate.odeint(self.ode,
-                                                  x0, t, args=params,
-                                                  #Dfun=ode.jacobian, I have not figured out the jacobian for these models yet
-                                                  mu=None, ml=None,
-                                                  col_deriv=False,
-                                                  mxstep=10000,
-                                                  full_output=True)
+        if hasattr(self, 'jacobian'): # May or may not of defined the models Jacobian
+            solution, output = scipy.integrate.odeint(self.ode,
+                                                      x0, t, args=params,
+                                                      Dfun=self.jacobian,
+                                                      mu=None, ml=None,
+                                                      col_deriv=False,
+                                                      mxstep=10000,
+                                                      full_output=True)
+        else:
+            solution, output = scipy.integrate.odeint(self.ode,
+                                                      x0, t, args=params,
+                                                      mu=None, ml=None,
+                                                      col_deriv=False,
+                                                      mxstep=10000,
+                                                      full_output=True)
 
         if full_output == True:
             # have both
