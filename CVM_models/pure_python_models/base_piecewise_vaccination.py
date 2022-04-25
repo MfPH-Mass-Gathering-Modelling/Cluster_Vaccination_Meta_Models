@@ -29,8 +29,8 @@ class BaseSingleClusterVacModel:
         self.vaccine_groups = []
         for vaccine_group in self.core_vaccine_groups:
             if vaccine_group in self.ve_delay_groups:
-                self.vaccine_groups.append('delay_' + vaccine_group)
-                self.groups_waiting_for_vaccine_effectiveness.append('delay_' + vaccine_group)
+                self.vaccine_groups.append(vaccine_group + '_delay')
+                self.groups_waiting_for_vaccine_effectiveness.append(vaccine_group + '_delay')
             self.vaccine_groups.append(vaccine_group)
             if vaccine_group in self.ve_wanning_groups:
                 self.vaccine_groups.append(vaccine_group + '_waned')
@@ -48,6 +48,12 @@ class BaseSingleClusterVacModel:
         self.groups_loss_via_vaccination = groups_loss_via_vaccination_conv
         self._sorting_states()
         self._attaching_ve_dicts(ve_dicts)
+        # Fitting via maximum likelihood stuff
+        self._lossObj = None
+        self._initial_values = None
+        self._initial_time = None
+        self._observations = None
+        self._observation_state_index = None
 
 
     def _attaching_ve_dicts(self, ve_dicts):
@@ -235,3 +241,90 @@ class BaseSingleClusterVacModel:
             return solution, output
         else:
             return solution
+
+    ####
+    # Fitting through maximum likelihood stuff below.
+    #####
+
+    def cost(self, theta=None, apply_weighting = True):
+        """
+        Find the cost/loss given time points and the corresponding
+        observations.
+
+        Parameters
+        ----------
+        theta: array like
+            input value of the parameters
+        apply_weighting: boolean
+            If True multiplies array of residuals by weightings, else raw
+            residuals are used.
+
+        Returns
+        -------
+        numeric
+            sum of the residuals squared
+
+        Notes
+        -----
+        Only works with a single target (state)
+
+        See also
+        --------
+        :meth:`diff_loss`
+
+        """
+        if self._lossObj is None:
+            raise AssertionError('Loss object not set. Use method "set_loss_object" to set.')
+        if self.initial_values is None:
+            raise AssertionError('initial variable values object not set.')
+        yhat = self._getSolution(theta)
+        c = self._lossObj.loss(yhat, apply_weighting = apply_weighting)
+
+        return np.nan_to_num(c) if c == np.inf else c
+
+    def _getSolution(self, theta):
+        x0 = self.initial_values
+        t = self.initial_time
+        params = theta
+        solution = self.integrate(x0, t, params)
+        return solution[:, self._observation_state_index]
+
+    @property
+    def loss_object(self):
+        return self._lossObj
+
+    @loss_object.setter
+    def loss_object(self, loss_object):
+        self._lossObj = loss_object
+
+    @property
+    def initial_values(self):
+        return self._initial_values
+
+    @initial_values.setter
+    def initial_values(self, initial_values):
+        self._initial_values = initial_values
+
+    @property
+    def initial_time(self):
+        return self._initial_time
+
+    @initial_time.setter
+    def initial_time(self, initial_time):
+        self._initial_time = initial_time
+
+    @property
+    def observations(self):
+        return self._observations
+
+    @observations.setter
+    def observations(self, observations):
+        self._observations = observations
+
+    @property
+    def observation_state_index(self):
+        return self._observation_state_index
+
+    @observation_state_index.setter
+    def observation_state_index(self, observation_state_index):
+        self._observation_state_index = observation_state_index

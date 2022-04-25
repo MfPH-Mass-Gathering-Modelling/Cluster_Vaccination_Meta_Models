@@ -72,6 +72,8 @@ starting_population = 14755211
 groups_loss_via_vaccination = {'unvaccinated': first_vac_dose,
                                'first_dose': second_vac_dose,
                                'second_dose': third_vac_dose}
+
+#%%
 mg_model = MassGatheringModel(starting_population,groups_loss_via_vaccination, ve_dict)
 
 
