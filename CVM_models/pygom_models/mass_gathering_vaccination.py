@@ -17,7 +17,7 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
     infectious_states = ['T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2']
     symptomatic_states = ['I_1', 'I_2', 'H']
     non_specific_params = ['theta', 'epsilon_1', 'epsilon_2', 'epsilon_3',
-                           'gamma_I_1', 'gamma_I_2', 'gamma_A_1', 'gamma_A_2',
+                           'gamma_i_1', 'gamma_i_2', 'gamma_a_1', 'gamma_a_2',
                            'psi', 'rho', 'alpha']
     cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['eta', 'mu']
     vaccine_specific_params = ['l', 'r', 'h', 'm']
@@ -64,19 +64,19 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                equation='epsilon_3 *' + T_A_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=A_1_i_v, destination=A_2_i_v,
-                               equation='gamma_A_1*' + A_1_i_v,
+                               equation='gamma_a_1*' + A_1_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=A_2_i_v, destination=R_i_v,
-                               equation='gamma_A_2*' + A_2_i_v,
+                               equation='gamma_a_2*' + A_2_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=T_I_i_v, destination=I_1_i_v,
                                equation='epsilon_3 *' + T_I_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=I_1_i_v, destination=I_2_i_v,
-                               equation='gamma_I_1*' + I_1_i_v,
+                               equation='gamma_i_1*' + I_1_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=I_2_i_v, destination=R_i_v,
-                               equation='gamma_I_2*' + I_2_i_v,
+                               equation='gamma_i_2*' + I_2_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=I_2_i_v, destination=H_i_v,
                                equation=eta_i + '*(1-' + h_v + ')*' + I_2_i_v,
