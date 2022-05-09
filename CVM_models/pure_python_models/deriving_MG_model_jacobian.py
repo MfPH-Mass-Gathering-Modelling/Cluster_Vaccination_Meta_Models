@@ -52,7 +52,7 @@ odes = single_cluster_model.get_ode_eqn()
 #%%
 # Determine models Jacobian
 jacobian = single_cluster_model.get_jacobian_eqn()
-print(single_cluster_constor.all_states)
+#print(single_cluster_constor.all_states)
 
 #%%
 #Convert to dictionary of keys

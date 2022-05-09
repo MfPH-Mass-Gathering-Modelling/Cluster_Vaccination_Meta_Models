@@ -22,7 +22,7 @@ class MassGatheringModel(BaseSingleClusterVacModel):
     states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'H', 'D', 'R']
     dead_states = ['D']
     vaccinable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'R']
-    observed_states = ['H_total', 'D_total']
+    observed_states = ['H_T', 'D_T']
     infectious_states = ['T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2']
     symptomatic_states = ['I_1', 'I_2', 'H']
     all_parameters = ['theta', 'epsilon_1', 'epsilon_2', 'epsilon_3', 'gamma_i_1', 'gamma_i_2',
@@ -57,73 +57,74 @@ class MassGatheringModel(BaseSingleClusterVacModel):
             psi,
             alpha
             ):
-        params = (theta,
-                  inverse_effective_delay,
-                  inverse_waning_immunity,
-                  epsilon_1,
-                  epsilon_2,
-                  epsilon_3,
-                  rho,
-                  gamma_a_1,
-                  gamma_a_2,
-                  gamma_i_1,
-                  gamma_i_2,
-                  eta,
-                  mu,
-                  psi,
-                  alpha)
-        if (params,y.tolist(),t) in self.ode_calls_dict:
-            y_deltas = self.ode_calls_dict[(params, y.tolist(), t)]
-        else:
-            foi = self.foi(y, beta, theta)
-            y_deltas = np.zeros(self.num_state)
-            for vaccine_group in self.vaccine_groups:
-                self.vac_group_transfer(y, y_deltas, t, inverse_effective_delay, inverse_waning_immunity, vaccine_group)
-                vac_group_states_index = self.state_index[vaccine_group]
-                # Infections
-                infections = (1 - self.ve_infection[vaccine_group]) * foi * y[vac_group_states_index['S']]
-                # progression to RT-pcr sensitivity
-                now_rtpcr_sensitive = epsilon_1 * y[vac_group_states_index['E']]
-                # progression to lfd/rapid antigen test sensitivity
-                now_infectious_and_LFD_sensitive = epsilon_2 * y[vac_group_states_index['T']]
-                vac_group_symptomatic_prop = rho * (1 - self.ve_symptoms[vaccine_group])
-                now_infectious_and_LFD_sensitive_will_be_symptomatic = vac_group_symptomatic_prop * now_infectious_and_LFD_sensitive
-                now_infectious_and_LFD_sensitive_will_be_asymptomatic = (1 - vac_group_symptomatic_prop) * now_infectious_and_LFD_sensitive
-                # progression with infection
-                asymptomatic_prog_1 = epsilon_3 * y[vac_group_states_index['T_A']]
-                symptomatic_prog_1 = epsilon_3 * y[vac_group_states_index['T_I']]
-                asymptomatic_prog_2 = gamma_a_1 * y[vac_group_states_index['A_1']]
-                symptomatic_prog_2 = gamma_i_1 * y[vac_group_states_index['I_1']]
-                # recovery
-                asymptomatic_recovery = gamma_a_2 * y[vac_group_states_index['A_2']]
-                symptomatic_recovery = gamma_i_2 * y[vac_group_states_index['I_2']]
-                hospital_recovery = psi * y[vac_group_states_index['H']]
-                # hospitalisation
-                hospitalisation = (1 - self.ve_hospitalisation[vaccine_group]) * eta * y[vac_group_states_index['I_2']]
-                # mortality
-                vac_group_symptomatic_mort = (1 - self.ve_mortality[vaccine_group]) * mu
-                symptomatic_mortality = vac_group_symptomatic_mort * y[vac_group_states_index['I_2']]
-                hospital_mortality = vac_group_symptomatic_mort * y[vac_group_states_index['H']]
-                # natural wanning imunity
-                waned_natural_immunity = alpha * y[vac_group_states_index['R']]
+        # params = (theta,
+        #           inverse_effective_delay,
+        #           inverse_waning_immunity,
+        #           epsilon_1,
+        #           epsilon_2,
+        #           epsilon_3,
+        #           rho,
+        #           gamma_a_1,
+        #           gamma_a_2,
+        #           gamma_i_1,
+        #           gamma_i_2,
+        #           eta,
+        #           mu,
+        #           psi,
+        #           alpha)
+        # key = (params, tuple(y.tolist()), t)
+        # if key in self.ode_calls_dict:
+        #     y_deltas = self.ode_calls_dict[key]
+        # else:
+        foi = self.foi(y, beta, theta)
+        y_deltas = np.zeros(self.num_state)
+        for vaccine_group in self.vaccine_groups:
+            self.vac_group_transfer(y, y_deltas, t, inverse_effective_delay, inverse_waning_immunity, vaccine_group)
+            vac_group_states_index = self.state_index[vaccine_group]
+            # Infections
+            infections = (1 - self.ve_infection[vaccine_group]) * foi * y[vac_group_states_index['S']]
+            # progression to RT-pcr sensitivity
+            now_rtpcr_sensitive = epsilon_1 * y[vac_group_states_index['E']]
+            # progression to lfd/rapid antigen test sensitivity
+            now_infectious_and_LFD_sensitive = epsilon_2 * y[vac_group_states_index['T']]
+            vac_group_symptomatic_prop = rho * (1 - self.ve_symptoms[vaccine_group])
+            now_infectious_and_LFD_sensitive_will_be_symptomatic = vac_group_symptomatic_prop * now_infectious_and_LFD_sensitive
+            now_infectious_and_LFD_sensitive_will_be_asymptomatic = (1 - vac_group_symptomatic_prop) * now_infectious_and_LFD_sensitive
+            # progression with infection
+            asymptomatic_prog_1 = epsilon_3 * y[vac_group_states_index['T_A']]
+            symptomatic_prog_1 = epsilon_3 * y[vac_group_states_index['T_I']]
+            asymptomatic_prog_2 = gamma_a_1 * y[vac_group_states_index['A_1']]
+            symptomatic_prog_2 = gamma_i_1 * y[vac_group_states_index['I_1']]
+            # recovery
+            asymptomatic_recovery = gamma_a_2 * y[vac_group_states_index['A_2']]
+            symptomatic_recovery = gamma_i_2 * y[vac_group_states_index['I_2']]
+            hospital_recovery = psi * y[vac_group_states_index['H']]
+            # hospitalisation
+            hospitalisation = (1 - self.ve_hospitalisation[vaccine_group]) * eta * y[vac_group_states_index['I_2']]
+            # mortality
+            vac_group_symptomatic_mort = (1 - self.ve_mortality[vaccine_group]) * mu
+            symptomatic_mortality = vac_group_symptomatic_mort * y[vac_group_states_index['I_2']]
+            hospital_mortality = vac_group_symptomatic_mort * y[vac_group_states_index['H']]
+            # natural wanning imunity
+            waned_natural_immunity = alpha * y[vac_group_states_index['R']]
 
-                # Put together deltas
-                y_deltas[vac_group_states_index['S']] += waned_natural_immunity - infections
-                y_deltas[vac_group_states_index['E']] += infections - now_rtpcr_sensitive
-                y_deltas[vac_group_states_index['T']] += now_rtpcr_sensitive - now_infectious_and_LFD_sensitive
-                y_deltas[vac_group_states_index['T_A']] += now_infectious_and_LFD_sensitive_will_be_asymptomatic - asymptomatic_prog_1
-                y_deltas[vac_group_states_index['T_I']] += now_infectious_and_LFD_sensitive_will_be_symptomatic - symptomatic_prog_1
-                y_deltas[vac_group_states_index['A_1']] += asymptomatic_prog_1 - asymptomatic_prog_2
-                y_deltas[vac_group_states_index['A_2']] += asymptomatic_prog_2 - asymptomatic_recovery
-                y_deltas[vac_group_states_index['I_1']] += symptomatic_prog_1 - symptomatic_prog_2
-                y_deltas[vac_group_states_index['I_2']] += symptomatic_prog_2 - symptomatic_recovery - symptomatic_mortality - hospitalisation
-                y_deltas[vac_group_states_index['H']] += hospitalisation - hospital_mortality - hospital_recovery
-                overall_mortality = symptomatic_mortality + hospital_mortality
-                y_deltas[vac_group_states_index['D']] += overall_mortality
-                y_deltas[vac_group_states_index['R']] += asymptomatic_recovery + symptomatic_recovery + hospital_recovery - waned_natural_immunity
-                y_deltas[-2] += hospitalisation
-                y_deltas[-1] += overall_mortality
-                self.ode_calls_dict[(params, y.tolist(), t)] = y_deltas
+            # Put together deltas
+            y_deltas[vac_group_states_index['S']] += waned_natural_immunity - infections
+            y_deltas[vac_group_states_index['E']] += infections - now_rtpcr_sensitive
+            y_deltas[vac_group_states_index['T']] += now_rtpcr_sensitive - now_infectious_and_LFD_sensitive
+            y_deltas[vac_group_states_index['T_A']] += now_infectious_and_LFD_sensitive_will_be_asymptomatic - asymptomatic_prog_1
+            y_deltas[vac_group_states_index['T_I']] += now_infectious_and_LFD_sensitive_will_be_symptomatic - symptomatic_prog_1
+            y_deltas[vac_group_states_index['A_1']] += asymptomatic_prog_1 - asymptomatic_prog_2
+            y_deltas[vac_group_states_index['A_2']] += asymptomatic_prog_2 - asymptomatic_recovery
+            y_deltas[vac_group_states_index['I_1']] += symptomatic_prog_1 - symptomatic_prog_2
+            y_deltas[vac_group_states_index['I_2']] += symptomatic_prog_2 - symptomatic_recovery - symptomatic_mortality - hospitalisation
+            y_deltas[vac_group_states_index['H']] += hospitalisation - hospital_mortality - hospital_recovery
+            overall_mortality = symptomatic_mortality + hospital_mortality
+            y_deltas[vac_group_states_index['D']] += overall_mortality
+            y_deltas[vac_group_states_index['R']] += asymptomatic_recovery + symptomatic_recovery + hospital_recovery - waned_natural_immunity
+            y_deltas[-2] += hospitalisation - hospital_recovery - hospital_mortality
+            y_deltas[-1] += overall_mortality
+                # self.ode_calls_dict[key] = y_deltas
 
         return y_deltas
 
@@ -148,24 +149,25 @@ class MassGatheringModel(BaseSingleClusterVacModel):
         if self.dok_jacobian is None:
             with open(dir_name + 'MG_model_jacobian.json') as json_file:
                 self.dok_jacobian = json.load(json_file)
-        params = (theta,
-                  inverse_effective_delay,
-                  inverse_waning_immunity,
-                  epsilon_1,
-                  epsilon_2,
-                  epsilon_3,
-                  rho,
-                  gamma_a_1,
-                  gamma_a_2,
-                  gamma_i_1,
-                  gamma_i_2,
-                  eta,
-                  mu,
-                  psi,
-                  alpha)
-        if (params,y.tolist(),t) in self.ode_calls_dict:
-            y_jacobian = self.jacobian_calls_dict[(params, y.tolist(), t)]
-        else:
+        # params = (theta,
+        #           inverse_effective_delay,
+        #           inverse_waning_immunity,
+        #           epsilon_1,
+        #           epsilon_2,
+        #           epsilon_3,
+        #           rho,
+        #           gamma_a_1,
+        #           gamma_a_2,
+        #           gamma_i_1,
+        #           gamma_i_2,
+        #           eta,
+        #           mu,
+        #           psi,
+        #           alpha)
+        # key = (params, tuple(y.tolist()), t)
+        # if key in self.ode_calls_dict:
+        #     y_jacobian = self.jacobian_calls_dict[key]
+        # else:
             state_value = y
             N = self.current_population(y)
             nu_unvaccinated = self.derived_vaccination_rates['unvaccinated'][t]
@@ -214,7 +216,7 @@ class MassGatheringModel(BaseSingleClusterVacModel):
 
             for coord, value in self.dok_jacobian.items():
                 y_jacobian[eval(coord)] = eval(value)
-            self.jacobian_calls_dict[(params, y.tolist(), t)] = y_jacobian
+            # self.jacobian_calls_dict[key] = y_jacobian
         return y_jacobian
     
     def diff_jacobian(self, y, t,
@@ -281,7 +283,7 @@ class MassGatheringModel(BaseSingleClusterVacModel):
         r_third_dose = self.ve_symptoms['third_dose']
         h_third_dose = self.ve_hospitalisation['third_dose']
         r_third_dose = self.ve_mortality['third_dose']
-        y_diff_jacobian = np.zeros(self.num_state,self.num_state)
+        y_diff_jacobian = np.zeros(self.num_state**2,self.num_state)
         # see script deriving_MG_model_jacobian.py for where dok_matrix is derived and saved into json formate.
 
         for coord, value in self.dok_diff_jacobian.items():

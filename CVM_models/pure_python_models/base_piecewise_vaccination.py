@@ -50,8 +50,8 @@ class BaseSingleClusterVacModel:
         self.groups_loss_via_vaccination = groups_loss_via_vaccination_conv
         self._sorting_states()
         self._attaching_ve_dicts(ve_dicts)
-        self.ode_calls_dict = {}
-        self.jacobian_calls_dict = {}
+        # self.ode_calls_dict = {}
+        # self.jacobian_calls_dict = {}
         self.dok_jacobian = None
         self.dok_gradient = None
         self.dok_gradients_jacobian = None

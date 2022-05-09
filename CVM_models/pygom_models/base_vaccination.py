@@ -12,6 +12,7 @@ from CVM_models.pygom_models.piecewise_param_est import PiecewiseParamEstODE
 class BaseMultiClusterVacConstructor:
     states = ['S']
     vaccinable_states = ['S']
+    observed_states = []
     infectious_states = []
     symptomatic_states = []
     dead_states = []
@@ -72,6 +73,11 @@ class BaseMultiClusterVacConstructor:
                         dead_pop.append(state_in_cluster)
 
             self.cluster_dead_population[cluster_i] = '+'.join(dead_pop)
+        self.observation_state_index = {}
+        for state in self.observed_states:
+            self.observation_state_index[state] = index
+            self.all_states.append(state)
+            index += 1
         self.num_states = index
         self._append_vaccination_group_transitions()
         # setting up forces of infection if you have infectious states

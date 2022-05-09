@@ -22,7 +22,12 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
     cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['eta', 'mu']
     vaccine_specific_params = ['l', 'r', 'h', 'm']
 
-    def __init__(self, clusters, vaccine_groups):
+    def __init__(self, clusters, vaccine_groups, include_observed_states=True):
+        if include_observed_states:
+            self.observed_states = ['H_T', 'D_T']
+            total_hospitalised = []
+            total_recovered_from_hosptial = []
+            total_dead = []
         super().__init__(clusters, vaccine_groups)
         for vaccine_stage, vaccine_group in enumerate(self.vaccine_groups):
             l_v = 'l_' + vaccine_group
@@ -46,6 +51,15 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                 D_i_v = "D_" + cluster_i + '_' + vaccine_group
                 H_i_v = "H_" + cluster_i + '_' + vaccine_group
                 R_i_v = "R_" + cluster_i + '_' + vaccine_group
+
+                hospitalised = eta_i + '*(1-' + h_v + ')*' + I_2_i_v
+                hospital_recovery = 'psi*' + H_i_v
+                symptomatic_deaths = mu_i + '*(1-' + m_v + ')*' + I_2_i_v
+                hospital_deaths = mu_i + '*(1-' + m_v + ')*' + H_i_v
+                if include_observed_states:
+                    total_hospitalised.append(hospitalised)
+                    total_recovered_from_hosptial.append(hospital_recovery)
+                    total_dead.append(symptomatic_deaths + '+' + hospital_deaths)
 
                 self.transitions += [
                     Transition(origin=S_i_v, destination=E_i_v,
@@ -79,18 +93,31 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                equation='gamma_i_2*' + I_2_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=I_2_i_v, destination=H_i_v,
-                               equation=eta_i + '*(1-' + h_v + ')*' + I_2_i_v,
+                               equation=hospitalised,
                                transition_type=TransitionType.T),
                     Transition(origin=H_i_v, destination=R_i_v,
-                               equation='psi*' + H_i_v,
+                               equation=hospital_recovery,
                                transition_type=TransitionType.T),
                     Transition(origin=I_2_i_v, destination=D_i_v,
-                               equation=mu_i + '*(1-' + m_v + ')*' + I_2_i_v,
+                               equation=symptomatic_deaths,
                                transition_type=TransitionType.T),
                     Transition(origin=H_i_v, destination=D_i_v,
-                               equation=mu_i + '*(1-' + m_v + ')*' + H_i_v,
+                               equation=hospital_deaths,
                                transition_type=TransitionType.T),
                     Transition(origin=R_i_v, destination=S_i_v,
                                equation='alpha*'+ R_i_v,
                                transition_type=TransitionType.T)
                 ]
+
+        if include_observed_states:
+            self.bd_list += [
+                Transition(origin='H_T',
+                           equation=' + '.join(total_hospitalised),
+                           transition_type=TransitionType.B),
+                Transition(origin='H_T',
+                           equation=' + '.join(total_recovered_from_hosptial),
+                           transition_type=TransitionType.D),
+                Transition(origin='D_T',
+                           equation=' + '.join(total_dead),
+                           transition_type=TransitionType.B)
+            ]

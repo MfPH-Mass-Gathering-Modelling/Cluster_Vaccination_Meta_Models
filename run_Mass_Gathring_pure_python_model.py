@@ -118,7 +118,7 @@ parameters = (
 
 #%%
 # Create Test population lets assume no infections prior to vaccination program and 10 infected arrive.
-y0 = np.zeros(mg_model.num_states)
+y0 = np.zeros(mg_model.num_state)
 infection_seed = 1
 y0[0] = starting_population-infection_seed
 y0[1] = infection_seed
@@ -141,7 +141,7 @@ sol_df.columns = pd.MultiIndex.from_tuples(multi_columns)
 sol_melted = pd.melt(sol_df, ignore_index=False)
 sol_line_list = sol_melted.reset_index()
 sol_line_list.columns = ['date','vaccine_group','state','population']
-sol_line_list.replace({'H_total':'H','D_total':'D','observed_states':'accumelated_totals'},inplace=True)
+sol_line_list.replace({'H_T':'H','D_T':'D','observed_states':'accumelated_totals'},inplace=True)
 
 
 #%%
@@ -183,7 +183,7 @@ plt.show()
 #%%
 #Plotting graph of state totals
 sol_state_totals = sol_df.groupby(level=1,axis=1).sum()
-sol_state_totals.drop(columns=['H_total','D_total'], inplace=True)
+sol_state_totals.drop(columns=['H_T','D_T'], inplace=True)
 plot, axes = plt.subplots(12, 1, sharex=True)
 plt.xticks(rotation=45)
 axes_index = 0
