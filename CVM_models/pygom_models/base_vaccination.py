@@ -11,18 +11,19 @@ from CVM_models.pygom_models.piecewise_param_est import PiecewiseParamEstODE
 
 class BaseMultiClusterVacConstructor:
     states = ['S']
-    vaccinable_states = ['S']
+    vaccine_dict = {}
     observed_states = []
     infectious_states = []
     symptomatic_states = []
+    isolating_states = []
     dead_states = []
     non_specific_params = []
     vaccine_specific_params = []
-    cluster_specific_params = ['N']
+    cluster_specific_params = ['N', 'kappa_D']
     vaccine_and_cluster_specific_params = ['nu']
 
 
-    def __init__(self, clusters, vaccine_groups):
+    def __init__(self, clusters):
         self.stoc_model = None
         self.det_model = None
         self.piecewise_param_est_model = None
@@ -33,12 +34,14 @@ class BaseMultiClusterVacConstructor:
         self.transitions = []
         self.bd_list = []
         self.derived_params = []
+        self.infectious_and_isolating_states = [state for state in self.infectious_states
+                                                  if state in self.isolating_states]
         self.infectious_and_symptomatic_states = [state for state in self.infectious_states
                                                   if state in self.symptomatic_states]
         self.infectious_and_asymptomatic_states = [state for state in self.infectious_states
                                                    if state not in self.symptomatic_states]
         self.clusters = clusters
-        self.vaccine_groups = vaccine_groups
+        self.vaccine_groups = list(self.vaccine_dict.keys())
         self.vaccine_specific_params_dict = {vaccine_specific_param:
                                                  [vaccine_specific_param +'_'+ vaccine_group for vaccine_group in self.vaccine_groups]
                                              for vaccine_specific_param in
@@ -112,6 +115,10 @@ class BaseMultiClusterVacConstructor:
             temp_lambda = ['theta*' + infectous_state + '_' + cluster_j + '_' + vaccine_group
                            for infectous_state in self.infectious_and_asymptomatic_states for vaccine_group in
                            self.vaccine_groups]
+            kappa_D = 'kappa_D_' + cluster_j
+            temp_lambda += [kappa_D + '*' + infectous_state + '_' + cluster_j + '_' + vaccine_group
+                           for infectous_state in self.infectious_and_isolating_states for vaccine_group in
+                           self.vaccine_groups]
             temp_lambda += [infectous_state + '_' + cluster_j + '_' + vaccine_group
                             for infectous_state in self.infectious_and_symptomatic_states for vaccine_group in
                             self.vaccine_groups]
@@ -157,13 +164,13 @@ class BaseMultiClusterVacConstructor:
 
 
     def _append_vaccination_group_transitions(self):
-        for vaccine_stage, vaccine_group in enumerate(self.vaccine_groups):
+        for vaccine_stage, (vaccine_group, vaccinable_states) in enumerate(self.vaccine_dict.items()):
             for cluster in self.clusters:
                 if vaccine_group is not self.vaccine_groups[-1]: # following transitions do not occur in last vaccine group.
                     vaccine_group_plus_1 = self.vaccine_groups[vaccine_stage+1]
                     nu_i_v = 'nu_' + cluster + '_' + vaccine_group
                     self.vaccine_and_cluster_specific_params_dict['nu'].append(nu_i_v)
-                    for state in self.vaccinable_states:
+                    for state in vaccinable_states:
                         state_i_v = state + "_" + cluster + '_' + vaccine_group
                         state_i_v_plus_1 = state + "_" + cluster + '_' + vaccine_group_plus_1
                         self.transitions.append(Transition(origin=state_i_v,

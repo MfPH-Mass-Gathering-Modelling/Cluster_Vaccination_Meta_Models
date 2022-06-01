@@ -11,98 +11,128 @@ from CVM_models.pygom_models.base_vaccination import BaseMultiClusterVacConstruc
 
 
 class MGModelConstructor(BaseMultiClusterVacConstructor):
-    states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2', 'H', 'D', 'R']
-    dead_states = ['D']
-    vaccinable_states = ['S', 'E', 'T', 'T_I', 'T_A', 'A_1', 'A_2', 'R']
-    infectious_states = ['T_I', 'T_A', 'A_1', 'A_2', 'I_1', 'I_2']
-    symptomatic_states = ['I_1', 'I_2', 'H']
-    non_specific_params = ['theta', 'epsilon_1', 'epsilon_2', 'epsilon_3',
-                           'gamma_i_1', 'gamma_i_2', 'gamma_a_1', 'gamma_a_2',
-                           'psi', 'rho', 'alpha']
-    cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['eta', 'mu']
-    vaccine_specific_params = ['l', 'r', 'h', 'm']
+    states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A', 'H', 'R']
+    vaccinable_states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'F_A', 'R']
+    vaccine_dict ={'unvaccinated': vaccinable_states,
+                   'first_dose_delay': states,
+                   'first_dose': vaccinable_states,
+                   'second_dose_delay': states,
+                   'second_dose': states,
+                   'waned': vaccinable_states,
+                   'third_dose_delay': states,
+                   'third_dose':None}
+    infectious_states = ['P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A']
+    symptomatic_states = ['M_I','F_I']
+    isolating_states = ['M_D','F_D']
+    non_specific_params = ['theta', 'p_s', 'epsilon_1', 'epsilon_2', 'p_d', 'epsilon_3',
+                           'p_h', 'gamma_i_1', 'gamma_i_2', 'gamma_a_1', 'gamma_a_2',
+                           'psi', 'alpha']
+    cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['eta']
+    vaccine_specific_params = ['l', 's', 'h']
 
-    def __init__(self, clusters, vaccine_groups, include_observed_states=True):
+    def __init__(self, clusters, include_observed_states=True):
         if include_observed_states:
             self.observed_states = ['H_T', 'D_T']
             total_hospitalised = []
             total_recovered_from_hosptial = []
-            total_dead = []
-        super().__init__(clusters, vaccine_groups)
+            total_detected_cases = []
+        super().__init__(clusters)
+        detected = 'p_d*epsilon_3'
+        undetected_symptomatic = '(1-p_d)*epsilon_3'
         for vaccine_stage, vaccine_group in enumerate(self.vaccine_groups):
             l_v = 'l_' + vaccine_group
-            r_v = 'r_' + vaccine_group
+
+            s_v = 's_' + vaccine_group
+            p_s_v = 'p_s * (1 -' + s_v +')'
+
             h_v = 'h_' + vaccine_group
-            m_v = 'm_' + vaccine_group
+            p_h_v = 'p_h * (1 -' + h_v +')'
+
+            detected_at_hospital = p_h_v +'*' + detected
+            detected_outside_hospital = '(1-' + p_h_v + ')*' + detected
+
             for cluster_i in self.clusters:
+
                 eta_i = 'eta_' + cluster_i
-                mu_i = 'mu_' + cluster_i
-                lambda_i = 'lambda_' + cluster_i
+                lambda_i_v = '(1-'+ l_v +')*lambda_' + cluster_i
+
 
                 S_i_v = "S_" + cluster_i + '_' + vaccine_group
                 E_i_v = "E_" + cluster_i + '_' + vaccine_group
-                T_i_v = "T_" + cluster_i + '_' + vaccine_group
-                T_I_i_v = "T_I_" + cluster_i + '_' + vaccine_group
-                T_A_i_v = "T_A_" + cluster_i + '_' + vaccine_group
-                A_1_i_v = "A_1_" + cluster_i + '_' + vaccine_group
-                A_2_i_v = "A_2_" + cluster_i + '_' + vaccine_group
-                I_1_i_v = "I_1_" + cluster_i + '_' + vaccine_group
-                I_2_i_v = "I_2_" + cluster_i + '_' + vaccine_group
-                D_i_v = "D_" + cluster_i + '_' + vaccine_group
+                G_I_i_v = "G_I_" + cluster_i + '_' + vaccine_group
+                G_A_i_v = "G_A_" + cluster_i + '_' + vaccine_group
+                P_I_i_v = "P_I_" + cluster_i + '_' + vaccine_group
+                P_A_i_v = "P_A_" + cluster_i + '_' + vaccine_group
+                M_D_i_v = "M_D_" + cluster_i + '_' + vaccine_group
+                M_I_i_v = "M_I_" + cluster_i + '_' + vaccine_group
+                M_A_i_v = "M_A_" + cluster_i + '_' + vaccine_group
+                F_D_i_v = "F_D_" + cluster_i + '_' + vaccine_group
+                F_I_i_v = "F_I_" + cluster_i + '_' + vaccine_group
+                F_A_i_v = "F_A_" + cluster_i + '_' + vaccine_group
                 H_i_v = "H_" + cluster_i + '_' + vaccine_group
                 R_i_v = "R_" + cluster_i + '_' + vaccine_group
 
-                hospitalised = eta_i + '*(1-' + h_v + ')*' + I_2_i_v
+
+                hospitalised = detected_at_hospital + '*' + P_I_i_v
                 hospital_recovery = 'psi*' + H_i_v
-                symptomatic_deaths = mu_i + '*(1-' + m_v + ')*' + I_2_i_v
-                hospital_deaths = mu_i + '*(1-' + m_v + ')*' + H_i_v
                 if include_observed_states:
                     total_hospitalised.append(hospitalised)
                     total_recovered_from_hosptial.append(hospital_recovery)
-                    total_dead.append(symptomatic_deaths + '+' + hospital_deaths)
-
+                    total_detected_cases.append(detected+'*'+P_I_i_v)
                 self.transitions += [
                     Transition(origin=S_i_v, destination=E_i_v,
-                               equation=lambda_i + '*' + '(1-' + l_v + ')*' + S_i_v,
+                               equation=lambda_i_v + '*' + S_i_v,
                                transition_type=TransitionType.T),
-                    Transition(origin=E_i_v, destination=T_i_v,
-                               equation='epsilon_1*' + E_i_v,
+                    # E classes
+                    Transition(origin=E_i_v, destination=G_I_i_v,
+                               equation= p_s_v +'*epsilon_1*' + E_i_v,
                                transition_type=TransitionType.T),
-                    Transition(origin=T_i_v, destination=T_I_i_v,
-                               equation='epsilon_2 * rho *(1-' + r_v + ') *' + T_i_v,
+                    Transition(origin=E_i_v, destination=G_A_i_v,
+                               equation='(1-'+p_s_v+')*epsilon_1*' + E_i_v,
                                transition_type=TransitionType.T),
-                    Transition(origin=T_i_v, destination=T_A_i_v,
-                               equation='epsilon_2 *(1- rho *(1-' + r_v + ')) *' + T_i_v,
+                    # G classes
+                    Transition(origin=G_I_i_v, destination=P_I_i_v,
+                               equation='epsilon_2*' + G_I_i_v,
                                transition_type=TransitionType.T),
-                    Transition(origin=T_A_i_v, destination=A_1_i_v,
-                               equation='epsilon_3 *' + T_A_i_v,
+                    Transition(origin=G_A_i_v, destination=P_A_i_v,
+                               equation='epsilon_2*' + G_A_i_v,
                                transition_type=TransitionType.T),
-                    Transition(origin=A_1_i_v, destination=A_2_i_v,
-                               equation='gamma_a_1*' + A_1_i_v,
-                               transition_type=TransitionType.T),
-                    Transition(origin=A_2_i_v, destination=R_i_v,
-                               equation='gamma_a_2*' + A_2_i_v,
-                               transition_type=TransitionType.T),
-                    Transition(origin=T_I_i_v, destination=I_1_i_v,
-                               equation='epsilon_3 *' + T_I_i_v,
-                               transition_type=TransitionType.T),
-                    Transition(origin=I_1_i_v, destination=I_2_i_v,
-                               equation='gamma_i_1*' + I_1_i_v,
-                               transition_type=TransitionType.T),
-                    Transition(origin=I_2_i_v, destination=R_i_v,
-                               equation='gamma_i_2*' + I_2_i_v,
-                               transition_type=TransitionType.T),
-                    Transition(origin=I_2_i_v, destination=H_i_v,
+                    # P classes
+                    Transition(origin=P_I_i_v, destination=H_i_v,
                                equation=hospitalised,
                                transition_type=TransitionType.T),
+                    Transition(origin=P_I_i_v, destination=M_D_i_v,
+                               equation=detected_outside_hospital+ '*' + P_A_i_v,
+                               transition_type=TransitionType.T),
+                    Transition(origin=P_I_i_v, destination=M_I_i_v,
+                               equation=undetected_symptomatic + '*' + P_A_i_v,
+                               transition_type=TransitionType.T),
+                    Transition(origin=P_A_i_v, destination=M_A_i_v,
+                               equation='epsilon_3*' + P_A_i_v,
+                               transition_type=TransitionType.T),
+                    # M classes
+                    Transition(origin=M_D_i_v, destination=F_D_i_v,
+                               equation='gamma_i_1*' + M_D_i_v,
+                               transition_type=TransitionType.T),
+                    Transition(origin=M_I_i_v, destination=F_I_i_v,
+                               equation='gamma_i_1*' + M_I_i_v,
+                               transition_type=TransitionType.T),
+                    Transition(origin=M_A_i_v, destination=F_A_i_v,
+                               equation='gamma_a_1*' + M_A_i_v,
+                               transition_type=TransitionType.T),
+                    # F classes
+                    Transition(origin=F_D_i_v, destination=R_i_v,
+                               equation='gamma_i_2*' + F_D_i_v,
+                               transition_type=TransitionType.T),
+                    Transition(origin=F_I_i_v, destination=R_i_v,
+                               equation='gamma_i_2*' + F_I_i_v,
+                               transition_type=TransitionType.T),
+                    Transition(origin=F_A_i_v, destination=R_i_v,
+                               equation='gamma_a_2*' + F_A_i_v,
+                               transition_type=TransitionType.T),
+
                     Transition(origin=H_i_v, destination=R_i_v,
                                equation=hospital_recovery,
-                               transition_type=TransitionType.T),
-                    Transition(origin=I_2_i_v, destination=D_i_v,
-                               equation=symptomatic_deaths,
-                               transition_type=TransitionType.T),
-                    Transition(origin=H_i_v, destination=D_i_v,
-                               equation=hospital_deaths,
                                transition_type=TransitionType.T),
                     Transition(origin=R_i_v, destination=S_i_v,
                                equation='alpha*'+ R_i_v,
@@ -111,13 +141,13 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
 
         if include_observed_states:
             self.bd_list += [
+                Transition(origin='D_T',
+                           equation=' + '.join(total_detected_cases),
+                           transition_type=TransitionType.B),
                 Transition(origin='H_T',
                            equation=' + '.join(total_hospitalised),
                            transition_type=TransitionType.B),
                 Transition(origin='H_T',
                            equation=' + '.join(total_recovered_from_hosptial),
-                           transition_type=TransitionType.D),
-                Transition(origin='D_T',
-                           equation=' + '.join(total_dead),
-                           transition_type=TransitionType.B)
+                           transition_type=TransitionType.D)
             ]
