@@ -13,14 +13,6 @@ from CVM_models.pygom_models.base_vaccination import BaseMultiClusterVacConstruc
 class MGModelConstructor(BaseMultiClusterVacConstructor):
     states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A', 'H', 'R']
     vaccinable_states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'F_A', 'R']
-    vaccine_dict ={'unvaccinated': vaccinable_states,
-                   'first_dose_delay': states,
-                   'first_dose': vaccinable_states,
-                   'second_dose_delay': states,
-                   'second_dose': states,
-                   'waned': vaccinable_states,
-                   'third_dose_delay': states,
-                   'third_dose':None}
     infectious_states = ['P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A']
     symptomatic_states = ['M_I','F_I']
     isolating_states = ['M_D','F_D']
@@ -30,13 +22,14 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
     cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['eta']
     vaccine_specific_params = ['l', 's', 'h']
 
-    def __init__(self, clusters, include_observed_states=True):
+    def __init__(self, vaccine_groups, clusters, group_transitions=None,
+                 include_observed_states=True):
         if include_observed_states:
             self.observed_states = ['H_T', 'D_T']
             total_hospitalised = []
             total_recovered_from_hosptial = []
             total_detected_cases = []
-        super().__init__(clusters)
+        super().__init__(vaccine_groups, clusters, group_transitions)
         detected = 'p_d*epsilon_3'
         undetected_symptomatic = '(1-p_d)*epsilon_3'
         for vaccine_stage, vaccine_group in enumerate(self.vaccine_groups):

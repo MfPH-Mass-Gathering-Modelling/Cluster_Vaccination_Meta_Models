@@ -11,7 +11,6 @@ from CVM_models.pygom_models.piecewise_param_est import PiecewiseParamEstODE
 
 class BaseMultiClusterVacConstructor:
     states = ['S']
-    vaccine_dict = {}
     observed_states = []
     infectious_states = []
     symptomatic_states = []
@@ -20,10 +19,10 @@ class BaseMultiClusterVacConstructor:
     non_specific_params = []
     vaccine_specific_params = []
     cluster_specific_params = ['N', 'kappa_D']
-    vaccine_and_cluster_specific_params = ['nu']
+    vaccine_and_cluster_specific_params = []
 
 
-    def __init__(self, clusters):
+    def __init__(self, vaccine_groups, clusters, group_transitions=None):
         self.stoc_model = None
         self.det_model = None
         self.piecewise_param_est_model = None
@@ -41,9 +40,14 @@ class BaseMultiClusterVacConstructor:
         self.infectious_and_asymptomatic_states = [state for state in self.infectious_states
                                                    if state not in self.symptomatic_states]
         self.clusters = clusters
-        self.vaccine_groups = list(self.vaccine_dict.keys())
+        self.vaccine_groups = vaccine_groups
+        self.group_transition_params = []
+        self.group_transitions = group_transitions
+        if group_transitions is not None:
+            self._gen_group_transitions(group_transitions)
         self.vaccine_specific_params_dict = {vaccine_specific_param:
-                                                 [vaccine_specific_param +'_'+ vaccine_group for vaccine_group in self.vaccine_groups]
+                                                 [vaccine_specific_param +'_'+ vaccine_group
+                                                  for vaccine_group in self.vaccine_groups]
                                              for vaccine_specific_param in
                                              self.vaccine_specific_params}
         self.cluster_specific_params_dict = {cluster_specific_param:
@@ -54,6 +58,7 @@ class BaseMultiClusterVacConstructor:
         self.vaccine_and_cluster_specific_params_dict = {vaccine_and_cluster_specific_param: []
                                                           for vaccine_and_cluster_specific_param in
                                                           self.vaccine_and_cluster_specific_params}
+
 
         self.states_dict = {state: [] for state in self.states}
         # Setting up clusters
@@ -91,7 +96,7 @@ class BaseMultiClusterVacConstructor:
 
 
     def _attach_Params(self):
-        self.all_parameters = self.non_specific_params + self.beta_list
+        self.all_parameters = self.non_specific_params + self.beta_list + self.group_transition_params
         dictionary_list = [
             self.vaccine_specific_params_dict,
             self.cluster_specific_params_dict,
@@ -100,6 +105,42 @@ class BaseMultiClusterVacConstructor:
         for specific_params_dict in dictionary_list:
             for list_item in specific_params_dict.values():
                 self.all_parameters += list_item
+
+
+    def _gen_group_transitions(self, group_transition_list):
+        for group_transition in group_transition_list:
+            from_cluster = group_transition['from cluster']
+            self._check_string_in_list_strings(from_cluster, 'clusters')
+            to_cluster = group_transition['to cluster']
+            self._check_string_in_list_strings(to_cluster, 'clusters')
+            from_vaccine_group = group_transition['from vaccine group']
+            self._check_string_in_list_strings(from_vaccine_group, 'vaccine_groups')
+            to_vaccine_group = group_transition['to vaccine group']
+            self._check_string_in_list_strings(to_vaccine_group, 'vaccine_groups')
+            states = group_transition['states']
+            parameter = group_transition['parameter']
+            if parameter not in self.group_transition_params:
+                self.group_transition_params.append(parameter)
+            for state in states:
+                self._check_string_in_list_strings(state, 'states')
+                origin = state +'_' + from_cluster + '_' + from_vaccine_group
+                destination = state + '_' + to_cluster + '_' + to_vaccine_group
+                self.transitions.append(Transition(origin=origin,
+                                                   destination=destination,
+                                                   equation=parameter + '*' + origin,
+                                                   transition_type=TransitionType.T))
+
+
+    def _check_string_in_list_strings(self, string, list_strings):
+        if not isinstance(string,str):
+            raise TypeError(str(string) +' should be of type string.')
+
+        check_list = eval('self.' + list_strings)
+        if string not in check_list:
+            raise ValueError(string + ' is not one of the predefined model ' + list_strings + ': ' +
+                             ','.join(check_list[:-1]) + ' and ' + check_list[:-1] +'.')
+
+
 
     # functions for appending to dictionary of lambdas and list of betas
     def append_transmission(self, cluster_i, cluster_j):
@@ -161,23 +202,6 @@ class BaseMultiClusterVacConstructor:
                     self.append_semetric_transmission(self, cluster_i, cluster_j)
                 elif include_intra:
                     self.append_intra_transmission(cluster_i)
-
-
-    def _append_vaccination_group_transitions(self):
-        for vaccine_stage, (vaccine_group, vaccinable_states) in enumerate(self.vaccine_dict.items()):
-            for cluster in self.clusters:
-                if vaccine_group is not self.vaccine_groups[-1]: # following transitions do not occur in last vaccine group.
-                    vaccine_group_plus_1 = self.vaccine_groups[vaccine_stage+1]
-                    nu_i_v = 'nu_' + cluster + '_' + vaccine_group
-                    self.vaccine_and_cluster_specific_params_dict['nu'].append(nu_i_v)
-                    for state in vaccinable_states:
-                        state_i_v = state + "_" + cluster + '_' + vaccine_group
-                        state_i_v_plus_1 = state + "_" + cluster + '_' + vaccine_group_plus_1
-                        self.transitions.append(Transition(origin=state_i_v,
-                                                           destination=state_i_v_plus_1,
-                                                           equation= nu_i_v+ '*' + state_i_v,
-                                                           transition_type=TransitionType.T)
-                                                )
 
 
     def generate_model(self, variety='deterministic'):
