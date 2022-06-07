@@ -20,20 +20,55 @@ import os
 dir_name = 'C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models/CVM_models/pure_python_models/'
 
 #%%
-# Create constructor
-clusters = ['']
+# Create clusters and vaccine groups
+only_cluster = ''
+clusters = [only_cluster]
 vaccine_groups = [
     'unvaccinated',
     'first_dose_delay',
     'first_dose',
     'second_dose_delay',
     'second_dose',
-    'waned', # do not change this to
+    'waned',
     'third_dose_delay',
     'third_dose'
 ]
 
-single_cluster_constor = MGModelConstructor(clusters, vaccine_groups)
+#%%
+# Create transitions between cluster and vaccine groups.
+vaccinable_states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'F_A', 'R']
+states = MGModelConstructor.states
+to_and_from_cluster = {'from cluster':only_cluster, 'to cluster':only_cluster}
+first_dose = {**to_and_from_cluster,
+              'from vaccine group': 'unvaccinated', 'to vaccine group': 'first_dose_delay',
+              'parameter': 'nu_1', 'states': vaccinable_states}
+first_dose_effective = {**to_and_from_cluster,
+                        'from vaccine group': 'first_dose_delay', 'to vaccine group': 'first_dose',
+                        'parameter': 'nu_d', 'states': states}
+
+second_dose = {**to_and_from_cluster,
+               'from vaccine group': 'first_dose', 'to vaccine group': 'second_dose_delay',
+               'parameter': 'nu_2', 'states': vaccinable_states}
+second_dose_effective = {**to_and_from_cluster,
+                         'from vaccine group': 'second_dose_delay', 'to vaccine group': 'second_dose',
+                         'parameter': 'nu_d', 'states': states}
+second_dose_waned = {**to_and_from_cluster,
+                     'from vaccine group': 'second_dose', 'to vaccine group': 'waned',
+                     'parameter': 'nu_w', 'states': states}
+third_dose = {**to_and_from_cluster,
+              'from vaccine group': 'waned', 'to vaccine group': 'third_dose_delay',
+              'parameter': 'nu_3', 'states': vaccinable_states}
+third_dose_effective = {**to_and_from_cluster,
+                        'from vaccine group': 'third_dose_delay', 'to vaccine group': 'third_dose',
+                        'parameter': 'nu_d', 'states': states}
+
+group_transitions = [first_dose, first_dose_effective,
+                     second_dose, second_dose_effective, second_dose_waned,
+                     third_dose, third_dose_effective
+                     ]
+
+single_cluster_constor = MGModelConstructor(vaccine_groups, clusters,
+                                            group_transitions=group_transitions, include_observed_states=True)
 
 #%%
 # Generate actual model.
@@ -41,8 +76,8 @@ single_cluster_model = single_cluster_constor.generate_model()
 
 #%%
 # Check model is correct - graph
-# graph_dot = single_cluster_model.get_transition_graph()
-# graph_dot.render(filename='mg_single_cluster_model_graph', format='pdf')
+graph_dot = single_cluster_model.get_transition_graph()
+graph_dot.render(filename='mg_single_cluster_model_graph', format='pdf')
 
 #%%
 # Check model is correct - ODEs

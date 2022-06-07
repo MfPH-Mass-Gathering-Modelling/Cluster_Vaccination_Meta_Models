@@ -12,7 +12,6 @@ from CVM_models.pygom_models.base_vaccination import BaseMultiClusterVacConstruc
 
 class MGModelConstructor(BaseMultiClusterVacConstructor):
     states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A', 'H', 'R']
-    vaccinable_states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'F_A', 'R']
     infectious_states = ['P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A']
     symptomatic_states = ['M_I','F_I']
     isolating_states = ['M_D','F_D']
@@ -23,7 +22,7 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
     vaccine_specific_params = ['l', 's', 'h']
 
     def __init__(self, vaccine_groups, clusters, group_transitions=None,
-                 include_observed_states=True):
+                 include_observed_states=False):
         if include_observed_states:
             self.observed_states = ['H_T', 'D_T']
             total_hospitalised = []

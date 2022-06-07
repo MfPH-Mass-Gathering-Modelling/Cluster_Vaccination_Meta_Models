@@ -87,7 +87,6 @@ class BaseMultiClusterVacConstructor:
             self.all_states.append(state)
             index += 1
         self.num_states = index
-        self._append_vaccination_group_transitions()
         # setting up forces of infection if you have infectious states
         if len(self.infectious_states) > 0:
             self.append_semetric_transmission_from_list(self.clusters)
@@ -168,9 +167,13 @@ class BaseMultiClusterVacConstructor:
             if cluster_i not in self.lambda_dict:
                 self.lambda_dict[cluster_i] = []
             n_j = 'N_' + cluster_j
-            cluster_dead_population = "("+self.cluster_dead_population[cluster_j]+")"
-            self.lambda_dict[cluster_i].append(
-                '(' + '+'.join(temp_lambda) + ')*' + beta + '/(' +n_j + '-'+ cluster_dead_population + ')')
+            cluster_lambda = '(' + '+'.join(temp_lambda) + ')*' + beta
+            if len(self.dead_states) > 0:
+                cluster_dead_population = "("+self.cluster_dead_population[cluster_j]+")"
+                cluster_lambda += '/(' +n_j + '-'+ cluster_dead_population + ')'
+            else:
+                cluster_lambda += '/' + n_j
+            self.lambda_dict[cluster_i].append(cluster_lambda)
 
     def append_intra_transmission(self, cluster_i):
         """Append cluster_i cluster_i transmssion term to beta_list and self.lambda_dict.
