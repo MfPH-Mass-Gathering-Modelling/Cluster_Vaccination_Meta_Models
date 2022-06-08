@@ -13,7 +13,7 @@ from CVM_models.pygom_models.base_vaccination import BaseMultiClusterVacConstruc
 class MGModelConstructor(BaseMultiClusterVacConstructor):
     states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A', 'H', 'R']
     infectious_states = ['P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A']
-    symptomatic_states = ['M_I','F_I']
+    symptomatic_states = ['M_I','F_I','M_D','F_D','H']
     isolating_states = ['M_D','F_D']
     non_specific_params = ['theta', 'p_s', 'epsilon_1', 'epsilon_2', 'p_d', 'epsilon_3',
                            'p_h', 'gamma_i_1', 'gamma_i_2', 'gamma_a_1', 'gamma_a_2',
@@ -94,10 +94,10 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                equation=hospitalised,
                                transition_type=TransitionType.T),
                     Transition(origin=P_I_i_v, destination=M_D_i_v,
-                               equation=detected_outside_hospital+ '*' + P_A_i_v,
+                               equation=detected_outside_hospital+ '*' + P_I_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=P_I_i_v, destination=M_I_i_v,
-                               equation=undetected_symptomatic + '*' + P_A_i_v,
+                               equation=undetected_symptomatic + '*' + P_I_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=P_A_i_v, destination=M_A_i_v,
                                equation='epsilon_3*' + P_A_i_v,

@@ -33,12 +33,6 @@ class BaseMultiClusterVacConstructor:
         self.transitions = []
         self.bd_list = []
         self.derived_params = []
-        self.infectious_and_isolating_states = [state for state in self.infectious_states
-                                                  if state in self.isolating_states]
-        self.infectious_and_symptomatic_states = [state for state in self.infectious_states
-                                                  if state in self.symptomatic_states]
-        self.infectious_and_asymptomatic_states = [state for state in self.infectious_states
-                                                   if state not in self.symptomatic_states]
         self.clusters = clusters
         self.vaccine_groups = vaccine_groups
         self.group_transition_params = []
@@ -152,16 +146,19 @@ class BaseMultiClusterVacConstructor:
         transmission_combo = (cluster_i, cluster_j)
         if transmission_combo not in self.transmission_combos:
             self.transmission_combos.append(transmission_combo)
-            temp_lambda = ['theta*' + infectous_state + '_' + cluster_j + '_' + vaccine_group
-                           for infectous_state in self.infectious_and_asymptomatic_states for vaccine_group in
-                           self.vaccine_groups]
             kappa_D = 'kappa_D_' + cluster_j
-            temp_lambda += [kappa_D + '*' + infectous_state + '_' + cluster_j + '_' + vaccine_group
-                           for infectous_state in self.infectious_and_isolating_states for vaccine_group in
-                           self.vaccine_groups]
-            temp_lambda += [infectous_state + '_' + cluster_j + '_' + vaccine_group
-                            for infectous_state in self.infectious_and_symptomatic_states for vaccine_group in
-                            self.vaccine_groups]
+            contributers = []
+            for infectous_state in self.infectious_states:
+                modifier = ''
+                if infectous_state not in self.symptomatic_states:
+                    modifier += 'theta*'
+                if infectous_state in self.isolating_states:
+                    modifier += kappa_D+'*'
+                infectous_state = modifier + infectous_state
+                contributers.append(infectous_state)
+            temp_lambda = [infectous_state + '_' + cluster_j + '_' + vaccine_group
+                           for infectous_state in contributers
+                           for vaccine_group in self.vaccine_groups]
             beta = 'beta_' + cluster_i + '_' + cluster_j
             self.beta_list.append(beta)
             if cluster_i not in self.lambda_dict:
