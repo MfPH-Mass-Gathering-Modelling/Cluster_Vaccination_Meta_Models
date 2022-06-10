@@ -16,8 +16,8 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
     symptomatic_states = ['M_I','F_I','M_D','F_D','H']
     isolating_states = ['M_D','F_D']
     non_specific_params = ['theta', 'p_s', 'epsilon_1', 'epsilon_2', 'p_d', 'epsilon_3',
-                           'p_h', 'gamma_i_1', 'gamma_i_2', 'gamma_a_1', 'gamma_a_2',
-                           'psi', 'alpha']
+                           'p_h', 'gamma_I_1', 'gamma_I_2', 'gamma_A_1', 'gamma_A_2',
+                           'gamma_H', 'alpha']
     cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['eta']
     vaccine_specific_params = ['l', 's', 'h']
 
@@ -66,7 +66,7 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
 
 
                 hospitalised = detected_at_hospital + '*' + P_I_i_v
-                hospital_recovery = 'psi*' + H_i_v
+                hospital_recovery = 'gamma_H*' + H_i_v
                 if include_observed_states:
                     total_hospitalised.append(hospitalised)
                     total_recovered_from_hosptial.append(hospital_recovery)
@@ -104,23 +104,23 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                transition_type=TransitionType.T),
                     # M classes
                     Transition(origin=M_D_i_v, destination=F_D_i_v,
-                               equation='gamma_i_1*' + M_D_i_v,
+                               equation='gamma_I_1*' + M_D_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=M_I_i_v, destination=F_I_i_v,
-                               equation='gamma_i_1*' + M_I_i_v,
+                               equation='gamma_I_1*' + M_I_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=M_A_i_v, destination=F_A_i_v,
-                               equation='gamma_a_1*' + M_A_i_v,
+                               equation='gamma_A_1*' + M_A_i_v,
                                transition_type=TransitionType.T),
                     # F classes
                     Transition(origin=F_D_i_v, destination=R_i_v,
-                               equation='gamma_i_2*' + F_D_i_v,
+                               equation='gamma_I_2*' + F_D_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=F_I_i_v, destination=R_i_v,
-                               equation='gamma_i_2*' + F_I_i_v,
+                               equation='gamma_I_2*' + F_I_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=F_A_i_v, destination=R_i_v,
-                               equation='gamma_a_2*' + F_A_i_v,
+                               equation='gamma_A_2*' + F_A_i_v,
                                transition_type=TransitionType.T),
 
                     Transition(origin=H_i_v, destination=R_i_v,

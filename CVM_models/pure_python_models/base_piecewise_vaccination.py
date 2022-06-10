@@ -7,9 +7,12 @@ Description:
 """
 import numpy as np
 import pandas as pd
-import pygom
+import copy
+import collections
 import scipy
 import functools
+
+
 
 
 class BaseSingleClusterVacModel:
@@ -23,11 +26,17 @@ class BaseSingleClusterVacModel:
     observed_states = []
     infectious_states = []
     symptomatic_states = []
+    isolating_states = []
+    universal_param_names = []
 
     def __init__(self, starting_population,
                  groups_loss_via_vaccination,
-                 ve_dicts):
+                 ve_dicts, **params_defined_at_init):
         self.starting_population = starting_population
+        for param_name in params_defined_at_init: 
+            if param_name not in self.universal_param_names:
+                raise ValueError(param_name + ' is not a name given to a parameter for this model.')
+        self.params_defined_at_init = params_defined_at_init
         self.vaccine_groups = []
         for vaccine_group in self.core_vaccine_groups:
             if vaccine_group in self.ve_delay_groups:
@@ -81,9 +90,17 @@ class BaseSingleClusterVacModel:
 
     def _sorting_states(self):
         self.infectious_and_symptomatic_states = [state for state in self.infectious_states
-                                                  if state in self.symptomatic_states]
+                                                  if state in self.symptomatic_states and
+                                                  state not in self.isolating_states]
         self.infectious_and_asymptomatic_states = [state for state in self.infectious_states
-                                                   if state not in self.symptomatic_states]
+                                                   if state not in self.symptomatic_states and
+                                                   state not in self.isolating_states]
+        self.isolating_and_symptomatic_states = [state for state in self.infectious_states
+                                                 if state in self.symptomatic_states and
+                                                 state in self.isolating_states]
+        self.isolating_and_asymptomatic_states = [state for state in self.infectious_states
+                                                  if state not in self.symptomatic_states and
+                                                  state in self.isolating_states]
         self.all_states_index = {}
         self.state_index = {}
         self.infectious_symptomatic_index = {}
@@ -122,24 +139,30 @@ class BaseSingleClusterVacModel:
     def _nesteddictvalues(self, d):
         return [index for sub_d in d.values() for index in sub_d.values()]
 
-    def foi(self, y, beta, asymptomatic_tran_mod):
+    def foi(self, y, beta, asymptomatic_tran_mod, isolation_mod):
         """Calculate force of infection (foi).
 
         Args:
             y (numpy.array): Value of current state variables.
             beta (float or int): Transmission coefficient.
             asymptomatic_tran_mod (float or int): Modification due to asymptomatic/pre-symptomatic state.
+            isolation_mod: Modification due to isolation.
 
         Returns:
             float: Force of infection given state variables.
         """
-        infectious_asymptomatic_index = self._nesteddictvalues(self.infectious_asymptomatic_index)
-        infectious_symptomatic_index = self._nesteddictvalues(self.infectious_symptomatic_index)
-        total_infectous_asymptomatic = y[infectious_asymptomatic_index].sum()
-        total_infectous_symptomatic = y[infectious_symptomatic_index].sum()
+        asymptomatic_index = self._nesteddictvalues(self.infectious_asymptomatic_index)
+        symptomatic_index = self._nesteddictvalues(self.infectious_symptomatic_index)
+        total_asymptomatic = asymptomatic_tran_mod *y[asymptomatic_index].sum()
+        total_symptomatic = y[symptomatic_index].sum()
+        isolating_asymptomatic_index = self._nesteddictvalues(self.isolating_asymptomatic_index)
+        isolating_symptomatic_index = self._nesteddictvalues(self.isolating_symptomatic_index)
+        total_isolating_asymptomatic = isolation_mod*asymptomatic_tran_mod *y[asymptomatic_index].sum()
+        total_isolating_symptomatic = isolation_mod*y[symptomatic_index].sum()
+        full_contribution = sum([total_asymptomatic,total_symptomatic,
+                                 total_isolating_asymptomatic,total_isolating_symptomatic])
         total_contactable_population = self.current_population(y)
-        foi = (beta * (asymptomatic_tran_mod * total_infectous_asymptomatic +
-                       total_infectous_symptomatic) / total_contactable_population)
+        foi = beta * full_contribution / total_contactable_population
         return foi
 
     def current_population(self, y):
@@ -215,8 +238,13 @@ class BaseSingleClusterVacModel:
                 y_deltas[vac_group_states_index[state]] -= transfering_pop
                 y_deltas[next_vac_group_states_index[state]] += transfering_pop
 
+    def params_named_tuple(self, arg_params):
+        Param_instance = collections.namedtuple('Param_instance', self.param_names)
+        params = copy.deepcopy(self.params_defined_at_init)
+        params.update(arg_params)
+        return Param_instance(**params)
 
-    def integrate(self, x0, t, params, full_output=False):
+    def integrate(self, x0, t, full_output=False, **params_defined_at_intergrate):
         '''
         A wrapper on top of :mod:`odeint <scipy.integrate.odeint>` using
         :class:`DeterministicOde <pygom.model.DeterministicOde>`.
@@ -229,12 +257,15 @@ class BaseSingleClusterVacModel:
             If the additional information from the integration is required
 
         '''
+        for param_name in params_defined_at_intergrate:
+            if param_name not in self.param_names:
+                raise ValueError(param_name + ' is not a name given to a parameter for this model.')
         self.derived_vaccination_rates = {key: {} for key in self.groups_loss_via_vaccination.keys()}
         # INTEGRATE!!! (shout it out loud, in Dalek voice)
         # determine the number of output we want
         if hasattr(self, 'jacobian'): # May or may not of defined the models Jacobian
             solution, output = scipy.integrate.odeint(self.ode,
-                                                      x0, t, args=params,
+                                                      x0, t, args=params_defined_at_intergrate,
                                                       Dfun=self.jacobian,
                                                       mu=None, ml=None,
                                                       col_deriv=False,
@@ -242,7 +273,7 @@ class BaseSingleClusterVacModel:
                                                       full_output=True)
         else:
             solution, output = scipy.integrate.odeint(self.ode,
-                                                      x0, t, args=params,
+                                                      x0, t, args=params_defined_at_intergrate,
                                                       mu=None, ml=None,
                                                       col_deriv=False,
                                                       mxstep=10000,
