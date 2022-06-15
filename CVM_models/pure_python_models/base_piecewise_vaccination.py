@@ -15,50 +15,41 @@ import functools
 
 
 
-class BaseSingleClusterVacModel:
-    core_vaccine_groups = []
-    ve_delay_groups = []
-    ve_wanning_groups = []
-    groups_waiting_for_vaccine_effectiveness = []
+class BaseScipyClusterVacModel:
     states = []
     dead_states = []
-    vaccinable_states = []
     observed_states = []
     infectious_states = []
     symptomatic_states = []
     isolating_states = []
     universal_param_names = []
+    vaccine_specific_params = []
+    cluster_specific_params = []
 
-    def __init__(self, starting_population,
-                 groups_loss_via_vaccination,
-                 ve_dicts, **params_defined_at_init):
+
+    def __init__(self, starting_population,  group_info, **params_defined_at_init):
         self.starting_population = starting_population
-        for param_name in params_defined_at_init: 
-            if param_name not in self.universal_param_names:
-                raise ValueError(param_name + ' is not a name given to a parameter for this model.')
+        self.peicewise_est_params = []
+        self.gen_group_info(self, group_info)
+        self.all_parameters = [param + '_' + vaccine_group
+                               for vaccine_group in self.vaccine_groups
+                               for param in self.vaccine_specific_params
+                               if param not in self.cluster_specific_params]
+        self.all_parameters += [param + '_' + cluster
+                                for cluster in self.clusters
+                                for param in self.cluster_specific_params
+                                if param not in self.vaccine_specific_params]
+        self.all_parameters = [param + '_' + cluster + '_' + vaccine_group
+                               for cluster in self.clusters
+                               for vaccine_group in self.vaccine_groups
+                               for param in self.vaccine_specific_params
+                               if param in self.cluster_specific_params]
+        self.group_transfer = []
+
+        self.check_param_names_validity(params_defined_at_init)
         self.params_defined_at_init = params_defined_at_init
-        self.vaccine_groups = []
-        for vaccine_group in self.core_vaccine_groups:
-            if vaccine_group in self.ve_delay_groups:
-                self.vaccine_groups.append(vaccine_group + '_delay')
-                self.groups_waiting_for_vaccine_effectiveness.append(vaccine_group + '_delay')
-            self.vaccine_groups.append(vaccine_group)
-            if vaccine_group in self.ve_wanning_groups:
-                self.vaccine_groups.append(vaccine_group + '_waned')
-        groups_loss_via_vaccination_conv = {}
-        for key, value in groups_loss_via_vaccination.items():
-            if isinstance(value, pd.Series):
-                new_value = value.tolist()
-            else:
-                new_value = value
-            if key in self.ve_wanning_groups:
-                new_key = key + '_waned'
-            else:
-                new_key = key
-            groups_loss_via_vaccination_conv[new_key] = new_value
-        self.groups_loss_via_vaccination = groups_loss_via_vaccination_conv
+
         self._sorting_states()
-        self._attaching_ve_dicts(ve_dicts)
         # self.ode_calls_dict = {}
         # self.jacobian_calls_dict = {}
         self.dok_jacobian = None
@@ -73,20 +64,88 @@ class BaseSingleClusterVacModel:
         self._time_frame = None
         self.num_param = len(self.all_parameters)
 
+    def gen_group_info(self, group_info):
+        self.group_transfer_dict = {}
+        if isinstance(group_info, dict):
+            self.vaccine_groups = set(group_info['vaccine groups'])
+            self.clusters = set(group_info['clusters'])
+        elif isinstance(group_info, list):
+            self.vaccine_groups = set()
+            self.clusters = set()
+            for group_transfer in group_info:
+                cluster = group_transfer['cluster']
+                self.clusters.add(cluster)
+                if cluster not in self.group_transfer_dict:
+                    self.group_transfer_dict[cluster] = {}
+                vaccine_group = group_transfer['vaccine group']
+                self.vaccine_groups.add(vaccine_group)
+                if vaccine_group not in self.group_transfer_dict[cluster]:
+                    self.group_transfer_dict[cluster][vaccine_group] = []
+                to_cluster = group_transfer['to cluster']
+                self.clusters.add(to_cluster)
+                to_vaccine_group = group_transfer['to vaccine group']
+                self.vaccine_groups.add(to_vaccine_group)
+                states = group_transfer['transferring states']
+                for state in states:
+                    self._check_string_in_list_strings(state, 'states')
+                parameter = group_transfer['parameter']
+                if parameter not in self.all_parameters:
+                    if not isinstance(parameter, str):
+                        raise TypeError(str(parameter) + ' should be of type string.')
+                    self.all_parameters.append(parameter)
+                if 'piece wise targets' in group_transfer:
+                    self.peicewise_est_params.append(parameter)
+                    if isinstance(group_transfer['piece wise targets'], pd.Series):
+                        group_transfer['piece wise targets'] = group_transfer['piece wise targets'].tolist()
+                entry = {key: value
+                         for key, value in group_transfer.items()
+                         if key not in ['cluster', 'vaccine group']}
+                self.group_transfer_dict[cluster][vaccine_group].append(entry)
 
-    def _attaching_ve_dicts(self, ve_dicts):
-        for name, var in ve_dicts.items():
-            error_msg_end = name + ' should be a dictionary with keys being the same as the names of the vaccine groups and values being a float or int >=0 and <=1.'
-            if not isinstance(var, dict):
-                raise TypeError(name + ' is not a dictionary. ' + error_msg_end)
-            if set(var.keys()) != set(self.vaccine_groups):
-                raise ValueError(name + "'s keys are not in the list: " + ', '.join(self.vaccine_groups) +
-                                 ". " + error_msg_end)
-            if not all([isinstance(item, (float, int)) for item in var.values()]):
-                raise TypeError(name + ' values are not floats or ints. ' + error_msg_end)
-            if not all([0 <= item <= 1 for item in var.values()]):
-                raise ValueError(name + ' values are not >=0 and <=1. ' + error_msg_end)
-            setattr(self, name, var)
+
+    def group_transfer(self, y, y_deltas, t,
+                       from_cluster,
+                       from_vaccine_group,
+                       params
+                       ):
+        if from_cluster in self.group_transfer_dict:
+            if from_vaccine_group in self.group_transfer_dict[from_cluster]:
+                group_transfers = self.group_transfer_dict[from_cluster][from_vaccine_group]
+                from_index_dict = self.state_index[from_cluster][from_vaccine_group]
+                for group_transfer in group_transfers:
+                    if 'piece wise targets' in group_transfer:
+                        index_of_t = int(t) + 1
+                        total_being_tranfered = group_transfer['piece wise targets'][index_of_t]
+                        if total_being_tranfered == 0:  # No point in calculations if no one is being vaccinated.
+                            param_val = 0
+                        else:
+                            from_states_index = [from_index_dict[state] for state in group_transfer['states']]
+                            total_avialable = y[from_states_index].sum()
+                            inst_loss_via_vaccine = self.instantaneous_transfer(total_being_tranfered,
+                                                                                total_avialable, t)
+                            param_val = 1 - np.exp(inst_loss_via_vaccine)
+                    else:
+                        param_val = params[group_transfer['parameter']]
+                    to_cluster = group_transfer['to cluster']
+                    to_vaccine_group = group_transfer['to vaccine group']
+                    to_index_dict = self.state_index[to_cluster][to_vaccine_group]
+                    for state in group_transfer['states']:
+                        from_index = from_index_dict[state]
+                        to_index = to_index_dict[state]
+                        transferring = param_val * y[from_index]
+                        y_deltas[from_index] -= transferring
+                        y_deltas[to_index] += transferring
+
+
+    def _check_string_in_list_strings(self, string, list_strings):
+        if not isinstance(string,str):
+            raise TypeError(str(string) +' should be of type string.')
+
+        check_list = eval('self.' + list_strings)
+        if string not in check_list:
+            raise ValueError(string + ' is not one of the predefined model ' + list_strings + ': ' +
+                             ','.join(check_list[:-1]) + ' and ' + check_list[:-1] +'.')
+
 
     def _sorting_states(self):
         self.infectious_and_symptomatic_states = [state for state in self.infectious_states
@@ -103,30 +162,31 @@ class BaseSingleClusterVacModel:
                                                   state in self.isolating_states]
         self.all_states_index = {}
         self.state_index = {}
-        self.infectious_symptomatic_index = {}
-        self.infectious_asymptomatic_index = {}
-        self.vaccinable_states_index ={}
-        self.dead_states_index = {}
+        self.infectious_symptomatic_indexes = []
+        self.infectious_asymptomatic_indexes = []
+        self.isolating_asymptomatic_indexes = []
+        self.isolating_symptomatic_indexes = []
+        self.dead_states_indexes = []
         # populating index dictionaries
         index = 0
-        for vaccine_group in self.vaccine_groups:
-            self.dead_states_index[vaccine_group] = {}
-            self.vaccinable_states_index[vaccine_group] = {}
-            self.state_index[vaccine_group] = {}
-            self.infectious_symptomatic_index[vaccine_group] = {}
-            self.infectious_asymptomatic_index[vaccine_group] = {}
-            for state in self.states:
-                self.all_states_index[state+'_'+vaccine_group]= index
-                self.state_index[vaccine_group][state] = index
-                if state in self.infectious_and_symptomatic_states:
-                    self.infectious_symptomatic_index[vaccine_group][state] = index
-                if state in self.infectious_and_asymptomatic_states:
-                    self.infectious_asymptomatic_index[vaccine_group][state] = index
-                if state in self.dead_states:
-                    self.dead_states_index[vaccine_group][state] = index
-                if state in self.vaccinable_states:
-                    self.vaccinable_states_index[vaccine_group][state] = index
-                index += 1
+        for cluster in self.clusters:
+            self.state_index[cluster] = {}
+            for vaccine_group in self.vaccine_groups:
+                self.state_index[cluster][vaccine_group] = {}
+                for state in self.states:
+                    self.all_states_index[state+'_'+cluster+'_'+vaccine_group] = index
+                    self.state_index[cluster][vaccine_group][state] = index
+                    if state in self.infectious_and_symptomatic_states:
+                        self.infectious_symptomatic_indexes.append(index)
+                    if state in self.infectious_and_asymptomatic_states:
+                        self.infectious_asymptomatic_indexes.append(index)
+                    if state in self.isolating_and_symptomatic_states:
+                        self.isolating_symptomatic_indexes.append(index)
+                    if state in self.isolating_and_asymptomatic_states:
+                        self.isolating_asymptomatic_indexes.append(index)
+                    if state in self.dead_states:
+                        self.dead_states_indexes.append(index)
+                    index += 1
 
         self.state_index['observed_states'] = {}
         for state in self.observed_states:
@@ -139,7 +199,7 @@ class BaseSingleClusterVacModel:
     def _nesteddictvalues(self, d):
         return [index for sub_d in d.values() for index in sub_d.values()]
 
-    def foi(self, y, beta, asymptomatic_tran_mod, isolation_mod):
+    def foi(self, y, beta, asymptomatic_tran_mod=1, isolation_mod=1):
         """Calculate force of infection (foi).
 
         Args:
@@ -151,14 +211,10 @@ class BaseSingleClusterVacModel:
         Returns:
             float: Force of infection given state variables.
         """
-        asymptomatic_index = self._nesteddictvalues(self.infectious_asymptomatic_index)
-        symptomatic_index = self._nesteddictvalues(self.infectious_symptomatic_index)
-        total_asymptomatic = asymptomatic_tran_mod *y[asymptomatic_index].sum()
-        total_symptomatic = y[symptomatic_index].sum()
-        isolating_asymptomatic_index = self._nesteddictvalues(self.isolating_asymptomatic_index)
-        isolating_symptomatic_index = self._nesteddictvalues(self.isolating_symptomatic_index)
-        total_isolating_asymptomatic = isolation_mod*asymptomatic_tran_mod *y[asymptomatic_index].sum()
-        total_isolating_symptomatic = isolation_mod*y[symptomatic_index].sum()
+        total_asymptomatic = asymptomatic_tran_mod *y[self.infectious_asymptomatic_index].sum()
+        total_symptomatic = y[self.infectious_symptomatic_index].sum()
+        total_isolating_asymptomatic = isolation_mod*asymptomatic_tran_mod *y[self.isolating_asymptomatic_index].sum()
+        total_isolating_symptomatic = isolation_mod*y[self.isolating_symptomatic_index].sum()
         full_contribution = sum([total_asymptomatic,total_symptomatic,
                                  total_isolating_asymptomatic,total_isolating_symptomatic])
         total_contactable_population = self.current_population(y)
@@ -166,8 +222,10 @@ class BaseSingleClusterVacModel:
         return foi
 
     def current_population(self, y):
-        dead_states_index = self._nesteddictvalues(self.dead_states_index)
-        return self.starting_population - y[dead_states_index].sum()
+        if self.dead_states_indexes: # empty lists default to false boolean values.
+            return self.starting_population - y[self.dead_states_indexes].sum()
+        else:
+            return self.starting_population
 
     def instantaneous_transfer(self, population_transitioning, population, t=None):
         if population_transitioning > population:
@@ -191,60 +249,29 @@ class BaseSingleClusterVacModel:
         return ans
 
 
-    def vac_group_transfer(self, y, y_deltas, t,
-                           inverse_effective_delay,
-                           inverse_waning_immunity,
-                           vaccine_group
-                           ):
-        if vaccine_group not in self.vaccine_groups:
-            raise ValueError('vaccine_group "' + vaccine_group + '" not used in model or mispelled in code.' +
-                             'Should be one of: "' + '", '.join(self.vaccine_groups) + '".')
+    def check_param_names_validity(self, params):
+        for param_name in params.keys():
+            if param_name not in self.all_params:
+                raise ValueError(param_name + ' is not a name given to a parameter for this model.')
+            if param_name in self.peicewise_est_params:
+                raise AssertionError(param_name + ' was set as a parameter to be estimated via piecewise estimiation ' +
+                                     'at the initialization of this model.')
 
-        if vaccine_group != self.vaccine_groups[-1]:
-            # Unpack y elements relevant to this vaccination group.
-            vac_group_states_index = self.state_index[vaccine_group]
-            index_of_next_vac_group = self.vaccine_groups.index(vaccine_group) + 1
-            next_vaccine_group = self.vaccine_groups[index_of_next_vac_group]
-            next_vac_group_states_index = self.state_index[next_vaccine_group]
+    def check_all_params_represented(self, params):
+        check_list = (list(params.keys()) + list(self.params_defined_at_init.keys()) +
+                      self.peicewise_est_params)
+        for param in self.all_parameters:
+            if param not in check_list:
+                raise AssertionError(param +
+                                     'has not been assigned a value or set up for piecewise estimation.')
 
-            # Lets deal with vaccinations first
-            ## Then the groups being transfered to the next vaccination group
-            if vaccine_group in self.groups_loss_via_vaccination.keys():
-                derived_vaccination_rates = self.derived_vaccination_rates[vaccine_group]
-                if t not in derived_vaccination_rates.keys():
-                    index_of_target_loss = int(t) + 1
-                    total_loss_via_vaccination = self.groups_loss_via_vaccination[vaccine_group][index_of_target_loss]
-                    if total_loss_via_vaccination == 0:  # No point in calculations if no one is being vaccinated.
-                        derived_vaccination_rates[t] = 0
-                    else:
-                        vaccinable_states_index = list(self.vaccinable_states_index[vaccine_group].values())
-                        total_vaccinable = y[vaccinable_states_index].sum()
-                        inst_loss_via_vaccine = self.instantaneous_transfer(total_loss_via_vaccination, total_vaccinable, t)
-                        derived_vaccination_rates[t] = 1 - np.exp(inst_loss_via_vaccine)
-                vaccine_group_transfer = {state: derived_vaccination_rates[t] * y[vac_group_states_index[state]]
-                                          for state in self.vaccinable_states}
-            elif vaccine_group in self.groups_waiting_for_vaccine_effectiveness:
-                vaccine_group_transfer = {state: inverse_effective_delay * y[vac_group_states_index[state]]
-                                          for state in self.vaccinable_states}
-            elif vaccine_group in self.ve_wanning_groups:
-                vaccine_group_transfer = {state: inverse_waning_immunity * y[vac_group_states_index[state]]
-                                          for state in self.vaccinable_states}
-            else:
-                raise ValueError(
-                    'vaccine_group "' + vaccine_group + '" has no method of transfer to next vaccination group ' +
-                    'and is not the last vaccination group "' + self.vaccine_groups[-1] + '".')
-
-            for state, transfering_pop in vaccine_group_transfer.items():
-                y_deltas[vac_group_states_index[state]] -= transfering_pop
-                y_deltas[next_vac_group_states_index[state]] += transfering_pop
-
-    def params_named_tuple(self, arg_params):
-        Param_instance = collections.namedtuple('Param_instance', self.param_names)
+    def combine_parameters(self, arg_params):
         params = copy.deepcopy(self.params_defined_at_init)
         params.update(arg_params)
-        return Param_instance(**params)
+        return params
 
-    def integrate(self, x0, t, full_output=False, **params_defined_at_intergrate):
+    def integrate(self, x0, t, full_output=False, called_in_fitting=False,
+                  **params_defined_at_intergrate):
         '''
         A wrapper on top of :mod:`odeint <scipy.integrate.odeint>` using
         :class:`DeterministicOde <pygom.model.DeterministicOde>`.
@@ -257,10 +284,12 @@ class BaseSingleClusterVacModel:
             If the additional information from the integration is required
 
         '''
-        for param_name in params_defined_at_intergrate:
-            if param_name not in self.param_names:
-                raise ValueError(param_name + ' is not a name given to a parameter for this model.')
-        self.derived_vaccination_rates = {key: {} for key in self.groups_loss_via_vaccination.keys()}
+        if not called_in_fitting: # If fitting model these checks should be done in fitting method.
+            # This would avoid unnecessary error checks.
+            self.check_param_names_validity(params_defined_at_intergrate)
+            self.check_all_params_represented(params_defined_at_intergrate)
+
+
         # INTEGRATE!!! (shout it out loud, in Dalek voice)
         # determine the number of output we want
         if hasattr(self, 'jacobian'): # May or may not of defined the models Jacobian

@@ -46,25 +46,25 @@ first_dose_effective = {**to_and_from_cluster,
                         'from vaccine group': 'first_dose_delay', 'to vaccine group': 'first_dose',
                         'parameter': 'nu_d', 'states': states}
 
-# second_dose = {**to_and_from_cluster,
-#                'from vaccine group': 'first_dose', 'to vaccine group': 'second_dose_delay',
-#                'parameter': 'nu_2', 'states': vaccinable_states}
-# second_dose_effective = {**to_and_from_cluster,
-#                          'from vaccine group': 'second_dose_delay', 'to vaccine group': 'second_dose',
-#                          'parameter': 'nu_d', 'states': states}
-# second_dose_waned = {**to_and_from_cluster,
-#                      'from vaccine group': 'second_dose', 'to vaccine group': 'waned',
-#                      'parameter': 'nu_w', 'states': states}
-# third_dose = {**to_and_from_cluster,
-#               'from vaccine group': 'waned', 'to vaccine group': 'third_dose_delay',
-#               'parameter': 'nu_3', 'states': vaccinable_states}
-# third_dose_effective = {**to_and_from_cluster,
-#                         'from vaccine group': 'third_dose_delay', 'to vaccine group': 'third_dose',
-#                         'parameter': 'nu_d', 'states': states}
+second_dose = {**to_and_from_cluster,
+               'from vaccine group': 'first_dose', 'to vaccine group': 'second_dose_delay',
+               'parameter': 'nu_2', 'states': vaccinable_states}
+second_dose_effective = {**to_and_from_cluster,
+                         'from vaccine group': 'second_dose_delay', 'to vaccine group': 'second_dose',
+                         'parameter': 'nu_d', 'states': states}
+second_dose_waned = {**to_and_from_cluster,
+                     'from vaccine group': 'second_dose', 'to vaccine group': 'waned',
+                     'parameter': 'nu_w', 'states': states}
+third_dose = {**to_and_from_cluster,
+              'from vaccine group': 'waned', 'to vaccine group': 'third_dose_delay',
+              'parameter': 'nu_3', 'states': vaccinable_states}
+third_dose_effective = {**to_and_from_cluster,
+                        'from vaccine group': 'third_dose_delay', 'to vaccine group': 'third_dose',
+                        'parameter': 'nu_d', 'states': states}
 
 group_transitions = [first_dose, first_dose_effective,
-#                      second_dose, second_dose_effective, second_dose_waned,
-#                      third_dose, third_dose_effective
+                     second_dose, second_dose_effective, second_dose_waned,
+                     third_dose, third_dose_effective
                      ]
 
 
@@ -112,6 +112,8 @@ def mod_dok(dict_of_keys):
     replacement = {state + '_' + vaccine_group: 'state_value['+str(index)+']'
                    for vaccine_group, state_dict_index in single_cluster_constor.cluste_vaccine_group_state_index[''].items()
                    for state, index in state_dict_index.items()}
+    replacement.update({parameter: 'parameters["'+parameter+'"]'
+                        for parameter in single_cluster_constor.all_parameters})
 
     new_dict_of_keys = {}
     for coords, value in dict_of_keys.items():
