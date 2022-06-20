@@ -18,17 +18,18 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
     non_specific_params = ['theta', 'p_s', 'epsilon_1', 'epsilon_2', 'p_d', 'epsilon_3',
                            'p_h', 'gamma_I_1', 'gamma_I_2', 'gamma_A_1', 'gamma_A_2',
                            'gamma_H', 'alpha']
-    cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params + ['eta']
+    cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params
     vaccine_specific_params = ['l', 's', 'h']
 
-    def __init__(self, vaccine_groups, clusters, group_transitions=None,
+    def __init__(self, group_structure,
                  include_observed_states=False):
         if include_observed_states:
             self.observed_states = ['H_T', 'D_T']
             total_hospitalised = []
             total_recovered_from_hosptial = []
             total_detected_cases = []
-        super().__init__(vaccine_groups, clusters, group_transitions)
+        super().__init__(group_structure)
+
         detected = 'p_d*epsilon_3'
         undetected_symptomatic = '(1-p_d)*epsilon_3'
         for vaccine_stage, vaccine_group in enumerate(self.vaccine_groups):
@@ -45,7 +46,6 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
 
             for cluster_i in self.clusters:
 
-                eta_i = 'eta_' + cluster_i
                 lambda_i_v = '(1-'+ l_v +')*lambda_' + cluster_i
 
 

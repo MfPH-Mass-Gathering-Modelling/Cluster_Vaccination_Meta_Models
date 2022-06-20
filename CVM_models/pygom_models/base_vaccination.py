@@ -22,7 +22,7 @@ class BaseMultiClusterVacConstructor:
     vaccine_and_cluster_specific_params = []
 
 
-    def __init__(self, vaccine_groups, clusters, group_transitions=None):
+    def __init__(self, group_structure):
         self.stoc_model = None
         self.det_model = None
         self.piecewise_param_est_model = None
@@ -33,12 +33,7 @@ class BaseMultiClusterVacConstructor:
         self.transitions = []
         self.bd_list = []
         self.derived_params = []
-        self.clusters = clusters
-        self.vaccine_groups = vaccine_groups
-        self.group_transition_params = []
-        self.group_transitions = group_transitions
-        if group_transitions is not None:
-            self._gen_group_transitions(group_transitions)
+        self.gen_group_structure(group_structure)
         self.vaccine_specific_params_dict = {vaccine_specific_param:
                                                  [vaccine_specific_param +'_'+ vaccine_group
                                                   for vaccine_group in self.vaccine_groups]
@@ -52,8 +47,6 @@ class BaseMultiClusterVacConstructor:
         self.vaccine_and_cluster_specific_params_dict = {vaccine_and_cluster_specific_param: []
                                                           for vaccine_and_cluster_specific_param in
                                                           self.vaccine_and_cluster_specific_params}
-
-
         self.states_dict = {state: [] for state in self.states}
         # Setting up clusters
         self.cluster_dead_population = {}
@@ -87,7 +80,6 @@ class BaseMultiClusterVacConstructor:
             self.derived_params = [('lambda_' + cluster_i, '+'.join(self.lambda_dict[cluster_i]))
                                    for cluster_i in self.clusters]
 
-
     def _attach_Params(self):
         self.all_parameters = self.non_specific_params + self.beta_list + self.group_transition_params
         dictionary_list = [
@@ -99,29 +91,43 @@ class BaseMultiClusterVacConstructor:
             for list_item in specific_params_dict.values():
                 self.all_parameters += list_item
 
-
-    def _gen_group_transitions(self, group_transition_list):
-        for group_transition in group_transition_list:
-            from_cluster = group_transition['from cluster']
-            self._check_string_in_list_strings(from_cluster, 'clusters')
-            to_cluster = group_transition['to cluster']
-            self._check_string_in_list_strings(to_cluster, 'clusters')
-            from_vaccine_group = group_transition['from vaccine group']
-            self._check_string_in_list_strings(from_vaccine_group, 'vaccine_groups')
-            to_vaccine_group = group_transition['to vaccine group']
-            self._check_string_in_list_strings(to_vaccine_group, 'vaccine_groups')
-            states = group_transition['states']
-            parameter = group_transition['parameter']
-            if parameter not in self.group_transition_params:
-                self.group_transition_params.append(parameter)
-            for state in states:
-                self._check_string_in_list_strings(state, 'states')
-                origin = state +'_' + from_cluster + '_' + from_vaccine_group
-                destination = state + '_' + to_cluster + '_' + to_vaccine_group
-                self.transitions.append(Transition(origin=origin,
-                                                   destination=destination,
-                                                   equation=parameter + '*' + origin,
-                                                   transition_type=TransitionType.T))
+    def gen_group_structure(self, group_structure):
+        self.group_transition_params = []
+        if isinstance(group_structure, dict):
+            self.vaccine_groups = group_structure['vaccine groups']
+            self.clusters = group_structure['clusters']
+        elif isinstance(group_structure, list):
+            self.vaccine_groups = []
+            self.clusters = []
+            for group_transfer in group_structure:
+                cluster = group_transfer['cluster']
+                if cluster not in self.clusters:
+                    self.clusters.append(cluster)
+                vaccine_group = group_transfer['vaccine group']
+                if vaccine_group not in self.vaccine_groups:
+                    self.vaccine_groups.append(vaccine_group)
+                to_cluster = group_transfer['to cluster']
+                if to_cluster not in self.clusters:
+                    self.clusters.append(to_cluster)
+                to_vaccine_group = group_transfer['to vaccine group']
+                if to_vaccine_group not in self.vaccine_groups:
+                    self.vaccine_groups.append(to_vaccine_group)
+                states = group_transfer['states']
+                if states == 'all':
+                    states = self.states
+                else:
+                    for state in states:
+                        self._check_string_in_list_strings(state, 'states')
+                parameter = group_transfer['parameter']
+                if parameter not in self.group_transition_params:
+                    self.group_transition_params.append(parameter)
+                for state in states:
+                    origin = state +'_' + cluster + '_' + vaccine_group
+                    destination = state + '_' + to_cluster + '_' + to_vaccine_group
+                    self.transitions.append(Transition(origin=origin,
+                                                       destination=destination,
+                                                       equation=parameter + '*' + origin,
+                                                       transition_type=TransitionType.T))
 
 
     def _check_string_in_list_strings(self, string, list_strings):

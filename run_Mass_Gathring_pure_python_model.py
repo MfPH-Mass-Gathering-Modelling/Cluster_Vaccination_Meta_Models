@@ -12,69 +12,34 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import copy
-
-
-#%%
-# Get Ontario's vaccination data
-from data_extraction.vaccination_data import ontario
-vac_data = ontario()
-first_vac_dose = vac_data.previous_day_at_least_one
-second_vac_dose = vac_data.previous_day_fully_vaccinated
-third_vac_dose = vac_data.previous_day_3doses
+import json
 
 
 # %%
 # import model
 from CVM_models.pure_python_models.mass_gathering_piecewise_vaccination import MassGatheringModel
 
-#%% 
-# Test parameter values - Vaccination parameters
-# These are available at https://docs.google.com/spreadsheets/d/1_XQn8bfPXKA8r1D_rz6Y1LeMTR_Y0RK5Rh4vnxDcQSo/edit?usp=sharing
-# These are placed in a list corresponding to the order of vaccination groups (enter MassGatheringModel.vaccination_groups)
-# For now we will assume that the 3rd dose is effective as the 2nd dose before wanning immunity.
-ve_dict = {}
-ve_dict['ve_infection'] = {
-    'unvaccinated': 0, 
-    'first_dose_delay': 0,
-    'first_dose': 0.634,
-    'second_dose_delay': 0.634,
-    'second_dose': 0.7443333333,
-    'second_dose_waned': 0.2446666667,
-    'third_dose_delay': 0.2446666667,
-    'third_dose': 0.7443333333}
-ve_dict['ve_symptoms'] = {
-    'unvaccinated': 0,
-    'first_dose_delay': 0,
-    'first_dose': 0.479,
-    'second_dose_delay': 0.479,
-    'second_dose': 0.7486666667,
-    'second_dose_waned': 0.274,
-    'third_dose_delay': 0.274,
-    'third_dose': 0.7486666667}
-ve_dict['ve_hospitalisation'] = {
-    'unvaccinated': 0,
-    'first_dose_delay': 0,
-    'first_dose': 0.661,
-    'second_dose_delay': 0.661,
-    'second_dose': 0.957,
-    'second_dose_waned': 0.815,
-    'third_dose_delay': 0.815,
-    'third_dose': 0.957}
-# assume that VE against hospitalisation and death are the same.
-ve_dict['ve_mortality'] = copy.deepcopy(ve_dict['ve_hospitalisation'])
+#%%
+# get model meta population structure
+structures_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/'+
+                  'Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models/'+
+                  'CVM_models/Model meta population structures/')
+with open(structures_dir + "single cluster 3 dose model.json", "r") as json_file:
+    group_info=json_file.read()
+
+group_info = json.loads(group_info)
+
 
 #%%
 # Initialise model
 # Ontario’s population reached 14,755,211 on January 1, 2021
 # https://www.ontario.ca/page/ontario-demographic-quarterly-highlights-fourth-quarter-2020#:~:text=Ontario’s%20population%20reached%2014%2C755%2C211%20on,quarter%20of%20the%20previous%20year..
 starting_population = 14755211
-groups_loss_via_vaccination = {'unvaccinated': first_vac_dose,
-                               'first_dose': second_vac_dose,
-                               'second_dose': third_vac_dose}
+
+
 
 #%%
-mg_model = MassGatheringModel(starting_population,groups_loss_via_vaccination, ve_dict)
+mg_model = MassGatheringModel(starting_population, group_info)
 
 
 
@@ -114,6 +79,40 @@ parameters = (
     psi,
     alpha
 )
+
+#%%
+# Test parameter values - Vaccination parameters
+# These are available at https://docs.google.com/spreadsheets/d/1_XQn8bfPXKA8r1D_rz6Y1LeMTR_Y0RK5Rh4vnxDcQSo/edit?usp=sharing
+# These are placed in a list corresponding to the order of vaccination groups (enter MassGatheringModel.vaccination_groups)
+# For now we will assume that the 3rd dose is effective as the 2nd dose before wanning immunity.
+ve_dict = {}
+ve_dict['ve_infection'] = {
+    'unvaccinated': 0,
+    'first_dose_delay': 0,
+    'first_dose': 0.634,
+    'second_dose_delay': 0.634,
+    'second_dose': 0.7443333333,
+    'second_dose_waned': 0.2446666667,
+    'third_dose_delay': 0.2446666667,
+    'third_dose': 0.7443333333}
+ve_dict['ve_symptoms'] = {
+    'unvaccinated': 0,
+    'first_dose_delay': 0,
+    'first_dose': 0.479,
+    'second_dose_delay': 0.479,
+    'second_dose': 0.7486666667,
+    'second_dose_waned': 0.274,
+    'third_dose_delay': 0.274,
+    'third_dose': 0.7486666667}
+ve_dict['ve_hospitalisation'] = {
+    'unvaccinated': 0,
+    'first_dose_delay': 0,
+    'first_dose': 0.661,
+    'second_dose_delay': 0.661,
+    'second_dose': 0.957,
+    'second_dose_waned': 0.815,
+    'third_dose_delay': 0.815,
+    'third_dose': 0.957}
 
 
 #%%
@@ -157,7 +156,17 @@ graph_groups_accross_states = sns.FacetGrid(sol_line_list, hue='vaccine_group', 
 graph_groups_accross_states.map(sns.lineplot, 'date', 'population')
 graph_groups_accross_states.add_legend()
 plt.show()
+#%%
+# Get Ontario's vaccination data
+from data_extraction.vaccination_data import ontario
+vac_data = ontario()
+first_vac_dose = vac_data.previous_day_at_least_one
+second_vac_dose = vac_data.previous_day_fully_vaccinated
+third_vac_dose = vac_data.previous_day_3doses
 
+groups_loss_via_vaccination = {'unvaccinated': first_vac_dose,
+                               'first_dose': second_vac_dose,
+                               'second_dose': third_vac_dose}
 
 #%%
 # Plotting graph of vaccination totals

@@ -20,56 +20,18 @@ import os
 dir_name = 'C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models/CVM_models/pure_python_models/'
 
 #%%
-# Create clusters and vaccine groups
-only_cluster = ''
-clusters = [only_cluster]
-vaccine_groups = [
-    'unvaccinated',
-    'first_dose_delay',
-    'first_dose',
-    # 'second_dose_delay',
-    # 'second_dose',
-    # 'waned',
-    # 'third_dose_delay',
-    # 'third_dose'
-]
+# get model meta population structure
+structures_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/'+
+                  'Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models/'+
+                  'CVM_models/Model meta population structures/')
+with open(structures_dir + "single cluster 3 dose model.json", "r") as json_file:
+    group_info=json_file.read()
+
+group_info = json.loads(group_info)
 
 #%%
-# Create transitions between cluster and vaccine groups.
-vaccinable_states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'F_A', 'R']
-states = MGModelConstructor.states
-to_and_from_cluster = {'from cluster':only_cluster, 'to cluster':only_cluster}
-first_dose = {**to_and_from_cluster,
-              'from vaccine group': 'unvaccinated', 'to vaccine group': 'first_dose_delay',
-              'parameter': 'nu_1', 'states': vaccinable_states}
-first_dose_effective = {**to_and_from_cluster,
-                        'from vaccine group': 'first_dose_delay', 'to vaccine group': 'first_dose',
-                        'parameter': 'nu_d', 'states': states}
 
-second_dose = {**to_and_from_cluster,
-               'from vaccine group': 'first_dose', 'to vaccine group': 'second_dose_delay',
-               'parameter': 'nu_2', 'states': vaccinable_states}
-second_dose_effective = {**to_and_from_cluster,
-                         'from vaccine group': 'second_dose_delay', 'to vaccine group': 'second_dose',
-                         'parameter': 'nu_d', 'states': states}
-second_dose_waned = {**to_and_from_cluster,
-                     'from vaccine group': 'second_dose', 'to vaccine group': 'waned',
-                     'parameter': 'nu_w', 'states': states}
-third_dose = {**to_and_from_cluster,
-              'from vaccine group': 'waned', 'to vaccine group': 'third_dose_delay',
-              'parameter': 'nu_3', 'states': vaccinable_states}
-third_dose_effective = {**to_and_from_cluster,
-                        'from vaccine group': 'third_dose_delay', 'to vaccine group': 'third_dose',
-                        'parameter': 'nu_d', 'states': states}
-
-group_transitions = [first_dose, first_dose_effective,
-                     second_dose, second_dose_effective, second_dose_waned,
-                     third_dose, third_dose_effective
-                     ]
-
-
-single_cluster_constor = MGModelConstructor(vaccine_groups, clusters,
-                                            group_transitions=group_transitions, include_observed_states=True)
+single_cluster_constor = MGModelConstructor(group_info, include_observed_states=True)
 
 #%%
 # Generate actual model.
@@ -105,13 +67,10 @@ jacobian_dok = conv_sym_mat_to_dok_sym(jacobian)
 #%%
 # Modify dict of keys for saving as json and use in methods.
 def mod_dok(dict_of_keys):
-    dict_of_keys = {coords: value.replace('__', '_') for coords, value in dict_of_keys.items()}
-    for symbol in MGModelConstructor.cluster_specific_params:
-        dict_of_keys = {coords: value.replace(symbol + '_', symbol) for coords, value in  dict_of_keys.items()}
-
-    replacement = {state + '_' + vaccine_group: 'state_value['+str(index)+']'
-                   for vaccine_group, state_dict_index in single_cluster_constor.cluste_vaccine_group_state_index[''].items()
-                   for state, index in state_dict_index.items()}
+    replacement = {state +'_'+ cluster + '_' + vaccine_group: 'y['+str(index)+']'
+                   for cluster, vaccine_group_state_index in single_cluster_constor.cluste_vaccine_group_state_index.items()
+                   for vaccine_group, state_index in vaccine_group_state_index.items()
+                   for state, index in state_index.items()}
     replacement.update({parameter: 'parameters["'+parameter+'"]'
                         for parameter in single_cluster_constor.all_parameters})
 

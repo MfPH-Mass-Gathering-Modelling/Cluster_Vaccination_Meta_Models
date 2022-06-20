@@ -8,12 +8,9 @@ Description:
 import numpy as np
 import pandas as pd
 import copy
-import collections
+import json
 import scipy
 import functools
-
-
-
 
 class BaseScipyClusterVacModel:
     states = []
@@ -26,33 +23,31 @@ class BaseScipyClusterVacModel:
     vaccine_specific_params = []
     cluster_specific_params = []
 
-
-    def __init__(self, starting_population,  group_info, **params_defined_at_init):
+    def __init__(self, starting_population,  group_structure, **params_defined_at_init):
         self.starting_population = starting_population
-        self.peicewise_est_params = []
-        self.gen_group_info(self, group_info)
-        self.all_parameters = [param + '_' + vaccine_group
-                               for vaccine_group in self.vaccine_groups
-                               for param in self.vaccine_specific_params
-                               if param not in self.cluster_specific_params]
+        self.all_parameters = []
+        self.gen_group_structure(group_structure)
+        self.all_parameters += [param + '_' + vaccine_group
+                                for vaccine_group in self.vaccine_groups
+                                for param in self.vaccine_specific_params
+                                if param not in self.cluster_specific_params]
         self.all_parameters += [param + '_' + cluster
                                 for cluster in self.clusters
                                 for param in self.cluster_specific_params
                                 if param not in self.vaccine_specific_params]
-        self.all_parameters = [param + '_' + cluster + '_' + vaccine_group
-                               for cluster in self.clusters
-                               for vaccine_group in self.vaccine_groups
-                               for param in self.vaccine_specific_params
-                               if param in self.cluster_specific_params]
-        self.group_transfer = []
-
+        self.all_parameters += [param + '_' + cluster + '_' + vaccine_group
+                                for cluster in self.clusters
+                                for vaccine_group in self.vaccine_groups
+                                for param in self.vaccine_specific_params
+                                if param in self.cluster_specific_params]
+        self.all_parameters += self.universal_param_names
         self.check_param_names_validity(params_defined_at_init)
         self.params_defined_at_init = params_defined_at_init
-
         self._sorting_states()
         # self.ode_calls_dict = {}
         # self.jacobian_calls_dict = {}
         self.dok_jacobian = None
+        self.dok_diff_jacobian = None
         self.dok_gradient = None
         self.dok_gradients_jacobian = None
         self._lossObj = None
@@ -64,39 +59,45 @@ class BaseScipyClusterVacModel:
         self._time_frame = None
         self.num_param = len(self.all_parameters)
 
-    def gen_group_info(self, group_info):
+    def gen_group_structure(self, group_structure):
+        self.params_estimated_via_piecewise_method = []
         self.group_transfer_dict = {}
-        if isinstance(group_info, dict):
-            self.vaccine_groups = set(group_info['vaccine groups'])
-            self.clusters = set(group_info['clusters'])
-        elif isinstance(group_info, list):
-            self.vaccine_groups = set()
-            self.clusters = set()
-            for group_transfer in group_info:
+        if isinstance(group_structure, dict):
+            self.vaccine_groups = group_structure['vaccine groups']
+            self.clusters = group_structure['clusters']
+        elif isinstance(group_structure, list):
+            self.vaccine_groups = []
+            self.clusters = []
+            for group_transfer in group_structure:
                 cluster = group_transfer['cluster']
-                self.clusters.add(cluster)
-                if cluster not in self.group_transfer_dict:
+                if cluster not in self.clusters:
                     self.group_transfer_dict[cluster] = {}
+                    self.clusters.append(cluster)
                 vaccine_group = group_transfer['vaccine group']
-                self.vaccine_groups.add(vaccine_group)
+                if vaccine_group not in self.vaccine_groups:
+                    self.vaccine_groups.append(vaccine_group)
                 if vaccine_group not in self.group_transfer_dict[cluster]:
                     self.group_transfer_dict[cluster][vaccine_group] = []
                 to_cluster = group_transfer['to cluster']
-                self.clusters.add(to_cluster)
+                if to_cluster not in self.clusters:
+                    self.clusters.append(to_cluster)
                 to_vaccine_group = group_transfer['to vaccine group']
-                self.vaccine_groups.add(to_vaccine_group)
-                states = group_transfer['transferring states']
-                for state in states:
-                    self._check_string_in_list_strings(state, 'states')
+                if to_vaccine_group not in self.vaccine_groups:
+                    self.vaccine_groups.append(to_vaccine_group)
+
+                if group_transfer['states']=='all':
+                    group_transfer['states'] = self.states
+                else:
+                    for state in group_transfer['states']:
+                        self._check_string_in_list_strings(state, 'states')
                 parameter = group_transfer['parameter']
-                if parameter not in self.all_parameters:
-                    if not isinstance(parameter, str):
-                        raise TypeError(str(parameter) + ' should be of type string.')
-                    self.all_parameters.append(parameter)
-                if 'piece wise targets' in group_transfer:
-                    self.peicewise_est_params.append(parameter)
-                    if isinstance(group_transfer['piece wise targets'], pd.Series):
-                        group_transfer['piece wise targets'] = group_transfer['piece wise targets'].tolist()
+                if not isinstance(parameter, str):
+                    raise TypeError(str(parameter) + ' should be of type string.')
+                self.all_parameters.append(parameter)
+                if 'piecewise targets' in group_transfer:
+                    self.params_estimated_via_piecewise_method.append(parameter)
+                    if isinstance(group_transfer['piecewise targets'], pd.Series):
+                        group_transfer['piecewise targets'] = group_transfer['piecewise targets'].tolist()
                 entry = {key: value
                          for key, value in group_transfer.items()
                          if key not in ['cluster', 'vaccine group']}
@@ -113,19 +114,26 @@ class BaseScipyClusterVacModel:
                 group_transfers = self.group_transfer_dict[from_cluster][from_vaccine_group]
                 from_index_dict = self.state_index[from_cluster][from_vaccine_group]
                 for group_transfer in group_transfers:
-                    if 'piece wise targets' in group_transfer:
-                        index_of_t = int(t) + 1
-                        total_being_tranfered = group_transfer['piece wise targets'][index_of_t]
-                        if total_being_tranfered == 0:  # No point in calculations if no one is being vaccinated.
-                            param_val = 0
+                    parameter = group_transfer['parameter']
+                    if 'piecewise targets' in group_transfer:
+                        if self.piecewise_est_param_values[parameter][t]:
+                            param_val = self.piecewise_est_param_values[parameter][t]
                         else:
-                            from_states_index = [from_index_dict[state] for state in group_transfer['states']]
-                            total_avialable = y[from_states_index].sum()
-                            inst_loss_via_vaccine = self.instantaneous_transfer(total_being_tranfered,
-                                                                                total_avialable, t)
-                            param_val = 1 - np.exp(inst_loss_via_vaccine)
+                            index_of_t = int(t) + 1
+                            total_being_tranfered = group_transfer['piecewise targets'][index_of_t]
+                            if total_being_tranfered == 0:  # No point in calculations if no one is being vaccinated.
+                                param_val = 0
+                            else:
+                                from_states_index = [from_index_dict[state] for state in group_transfer['states']]
+                                total_avialable = y[from_states_index].sum()
+                                inst_loss_via_vaccine = self.instantaneous_transfer(total_being_tranfered,
+                                                                                    total_avialable, t)
+                                param_val = 1 - np.exp(inst_loss_via_vaccine)
+
+                            self.piecewise_est_param_values[parameter][t] = param_val
                     else:
-                        param_val = params[group_transfer['parameter']]
+                        param_val = params[parameter]
+
                     to_cluster = group_transfer['to cluster']
                     to_vaccine_group = group_transfer['to vaccine group']
                     to_index_dict = self.state_index[to_cluster][to_vaccine_group]
@@ -253,21 +261,24 @@ class BaseScipyClusterVacModel:
         for param_name in params.keys():
             if param_name not in self.all_params:
                 raise ValueError(param_name + ' is not a name given to a parameter for this model.')
-            if param_name in self.peicewise_est_params:
+            if param_name in self.params_estimated_via_piecewise_method:
                 raise AssertionError(param_name + ' was set as a parameter to be estimated via piecewise estimiation ' +
                                      'at the initialization of this model.')
 
     def check_all_params_represented(self, params):
         check_list = (list(params.keys()) + list(self.params_defined_at_init.keys()) +
-                      self.peicewise_est_params)
+                      self.params_estimated_via_piecewise_method)
         for param in self.all_parameters:
             if param not in check_list:
                 raise AssertionError(param +
                                      'has not been assigned a value or set up for piecewise estimation.')
 
-    def combine_parameters(self, arg_params):
+    def combine_parameters(self, arg_params, t=None):
         params = copy.deepcopy(self.params_defined_at_init)
         params.update(arg_params)
+        if t is not None:
+            for param, values in self.piecewise_est_param_values.items():
+                params[param] = values[t]
         return params
 
     def integrate(self, x0, t, full_output=False, called_in_fitting=False,
@@ -288,11 +299,17 @@ class BaseScipyClusterVacModel:
             # This would avoid unnecessary error checks.
             self.check_param_names_validity(params_defined_at_intergrate)
             self.check_all_params_represented(params_defined_at_intergrate)
-
-
+        self.piecewise_est_param_values = {param: {} for param in self.params_estimated_via_piecewise_method}
         # INTEGRATE!!! (shout it out loud, in Dalek voice)
         # determine the number of output we want
-        if hasattr(self, 'jacobian'): # May or may not of defined the models Jacobian
+        if self.dok_jacobian is None: # May or may not of defined the models Jacobian
+            solution, output = scipy.integrate.odeint(self.ode,
+                                                      x0, t, args=params_defined_at_intergrate,
+                                                      mu=None, ml=None,
+                                                      col_deriv=False,
+                                                      mxstep=10000,
+                                                      full_output=True)
+        else:
             solution, output = scipy.integrate.odeint(self.ode,
                                                       x0, t, args=params_defined_at_intergrate,
                                                       Dfun=self.jacobian,
@@ -300,23 +317,88 @@ class BaseScipyClusterVacModel:
                                                       col_deriv=False,
                                                       mxstep=10000,
                                                       full_output=True)
-        else:
-            solution, output = scipy.integrate.odeint(self.ode,
-                                                      x0, t, args=params_defined_at_intergrate,
-                                                      mu=None, ml=None,
-                                                      col_deriv=False,
-                                                      mxstep=10000,
-                                                      full_output=True)
-
         if full_output == True:
             # have both
             return solution, output
         else:
             return solution
 
-    ####
-    # Fitting through maximum likelihood stuff below.
-    #####
+    #%% JACOBIAN MATRICIES ETC OF MODELS
+
+    def load_dok_jacobian(self, json_file):
+        with open(json_file) as json_file:
+            self.dok_jacobian = json.load(json_file)
+
+
+    def jacobian(self, y, t, **arg_params):
+        if self.dok_jacobian is None:
+            raise AssertionError('Dictionary of Keys (DOK) version of jacobian needs to be loaded first.' +
+                                 'Call method load_dok_jacobian.')
+
+        N = self.current_population(y)
+        parameters = self.combine_parameters(arg_params, t)
+        y_jacobian = np.zeros(self.num_state, self.num_state)
+        for coord, value in self.dok_jacobian.items():
+            y_jacobian[eval(coord)] = eval(value)
+
+        return y_jacobian
+
+    def load_dok_diff_jacobian(self, json_file):
+        with open(json_file) as json_file:
+            self.dok_diff_jacobian = json.load(json_file)
+
+    def diff_jacobian(self, y, t, **arg_params):
+        if self.dok_diff_jacobian is None:
+            raise AssertionError('Dictionary of Keys (DOK) version of matrix needs to be loaded first.' +
+                                 'Call method load_dok_diff_jacobian.')
+
+        N = self.current_population(y)
+        parameters = self.combine_parameters(arg_params, t)
+        y_diff_jacobian = np.zeros(self.num_state ** 2, self.num_state)
+        for coord, value in self.dok_diff_jacobian.items():
+            y_diff_jacobian[eval(coord)] = eval(value)
+
+        return y_diff_jacobian
+
+    def load_dok_gradient(self, json_file):
+        with open(json_file) as json_file:
+            self.dok_gradient = json.load(json_file)
+
+    def gradient(self, y, t, **arg_params):
+        if self.dok_gradient is None:
+            raise AssertionError('Dictionary of Keys (DOK) version of matrix needs to be loaded first.' +
+                                 'Call method load_dok_gradient.')
+
+        N = self.current_population(y)
+        parameters = self.combine_parameters(arg_params, t)
+        y_gradient = np.zeros(self.num_state, self.num_param)
+        # see script deriving_MG_model_jacobian.py for where dok_matrix is derived and saved into json formate.
+
+        for coord, value in self.dok_gradient.items():
+            y_gradient[eval(coord)] = eval(value)
+        return y_gradient
+
+    def load_dok_grad_jacobian(self, json_file):
+        with open(json_file) as json_file:
+            self.dok_grad_jacobian = json.load(json_file)
+
+    def grad_jacobian(self, y, t, **arg_params):
+        if self.dok_grad_jacobian is None:
+            raise AssertionError('Dictionary of Keys (DOK) version of matrix needs to be loaded first.' +
+                                 'Call method load_dok_grad_jacobian.')
+
+        N = self.current_population(y)
+        parameters = self.combine_parameters(arg_params, t)
+        y_gradient_jacobian = np.zeros(self.num_state, self.num_param)
+        # see script deriving_MG_model_jacobian.py for where dok_matrix is derived and saved into json formate.
+
+        for coord, value in self.dok_gradients_jacobian.items():
+            y_gradient_jacobian[eval(coord)] = eval(value)
+        return y_gradient_jacobian
+
+
+    #%% Fitting through maximum likelihood stuff below.
+
 
     def cost(self, params=None, apply_weighting = True):
         """
