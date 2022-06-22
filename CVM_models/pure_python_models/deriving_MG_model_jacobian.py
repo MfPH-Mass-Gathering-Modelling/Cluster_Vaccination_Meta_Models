@@ -71,7 +71,7 @@ def mod_dok(dict_of_keys):
                    for cluster, vaccine_group_state_index in single_cluster_constor.cluste_vaccine_group_state_index.items()
                    for vaccine_group, state_index in vaccine_group_state_index.items()
                    for state, index in state_index.items()}
-    replacement.update({parameter: 'parameters["'+parameter+'"]'
+    replacement.update({parameter: "parameters['"+parameter+"']"
                         for parameter in single_cluster_constor.all_parameters})
 
     new_dict_of_keys = {}

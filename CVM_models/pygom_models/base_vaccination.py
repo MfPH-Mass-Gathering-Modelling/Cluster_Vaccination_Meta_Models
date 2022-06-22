@@ -16,7 +16,7 @@ class BaseMultiClusterVacConstructor:
     symptomatic_states = []
     isolating_states = []
     dead_states = []
-    non_specific_params = []
+    universal_params = []
     vaccine_specific_params = []
     cluster_specific_params = ['N', 'kappa_D']
     vaccine_and_cluster_specific_params = []
@@ -81,7 +81,7 @@ class BaseMultiClusterVacConstructor:
                                    for cluster_i in self.clusters]
 
     def _attach_Params(self):
-        self.all_parameters = self.non_specific_params + self.beta_list + self.group_transition_params
+        self.all_parameters = set(self.universal_params + self.beta_list + self.group_transition_params)
         dictionary_list = [
             self.vaccine_specific_params_dict,
             self.cluster_specific_params_dict,
@@ -89,7 +89,7 @@ class BaseMultiClusterVacConstructor:
         ]
         for specific_params_dict in dictionary_list:
             for list_item in specific_params_dict.values():
-                self.all_parameters += list_item
+                self.all_parameters.update(list_item)
 
     def gen_group_structure(self, group_structure):
         self.group_transition_params = []

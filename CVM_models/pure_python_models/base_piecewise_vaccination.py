@@ -19,28 +19,28 @@ class BaseScipyClusterVacModel:
     infectious_states = []
     symptomatic_states = []
     isolating_states = []
-    universal_param_names = []
+    universal_params = []
     vaccine_specific_params = []
     cluster_specific_params = []
 
     def __init__(self, starting_population,  group_structure, **params_defined_at_init):
         self.starting_population = starting_population
-        self.all_parameters = []
+        self.all_parameters = set(self.universal_params)
         self.gen_group_structure(group_structure)
-        self.all_parameters += [param + '_' + vaccine_group
-                                for vaccine_group in self.vaccine_groups
-                                for param in self.vaccine_specific_params
-                                if param not in self.cluster_specific_params]
-        self.all_parameters += [param + '_' + cluster
-                                for cluster in self.clusters
-                                for param in self.cluster_specific_params
-                                if param not in self.vaccine_specific_params]
-        self.all_parameters += [param + '_' + cluster + '_' + vaccine_group
-                                for cluster in self.clusters
-                                for vaccine_group in self.vaccine_groups
-                                for param in self.vaccine_specific_params
-                                if param in self.cluster_specific_params]
-        self.all_parameters += self.universal_param_names
+        self.all_parameters.update([param + '_' + vaccine_group
+                                    for vaccine_group in self.vaccine_groups
+                                    for param in self.vaccine_specific_params
+                                    if param not in self.cluster_specific_params])
+        self.all_parameters.update([param + '_' + cluster
+                                    for cluster in self.clusters
+                                    for param in self.cluster_specific_params
+                                    if param not in self.vaccine_specific_params])
+        self.all_parameters.update([param + '_' + cluster + '_' + vaccine_group
+                                    for cluster in self.clusters
+                                    for vaccine_group in self.vaccine_groups
+                                    for param in self.vaccine_specific_params
+                                    if param in self.cluster_specific_params])
+        self.all_parameters = sorted(self.all_parameters)
         self.check_param_names_validity(params_defined_at_init)
         self.params_defined_at_init = params_defined_at_init
         self._sorting_states()
@@ -93,7 +93,7 @@ class BaseScipyClusterVacModel:
                 parameter = group_transfer['parameter']
                 if not isinstance(parameter, str):
                     raise TypeError(str(parameter) + ' should be of type string.')
-                self.all_parameters.append(parameter)
+                self.all_parameters.add(parameter)
                 if 'piecewise targets' in group_transfer:
                     self.params_estimated_via_piecewise_method.append(parameter)
                     if isinstance(group_transfer['piecewise targets'], pd.Series):
@@ -116,7 +116,7 @@ class BaseScipyClusterVacModel:
                 for group_transfer in group_transfers:
                     parameter = group_transfer['parameter']
                     if 'piecewise targets' in group_transfer:
-                        if self.piecewise_est_param_values[parameter][t]:
+                        if t in self.piecewise_est_param_values[parameter]:
                             param_val = self.piecewise_est_param_values[parameter][t]
                         else:
                             index_of_t = int(t) + 1
@@ -170,28 +170,32 @@ class BaseScipyClusterVacModel:
                                                   state in self.isolating_states]
         self.all_states_index = {}
         self.state_index = {}
-        self.infectious_symptomatic_indexes = []
-        self.infectious_asymptomatic_indexes = []
-        self.isolating_asymptomatic_indexes = []
-        self.isolating_symptomatic_indexes = []
+        self.infectious_symptomatic_indexes = {}
+        self.infectious_asymptomatic_indexes = {}
+        self.isolating_asymptomatic_indexes = {}
+        self.isolating_symptomatic_indexes = {}
         self.dead_states_indexes = []
         # populating index dictionaries
         index = 0
         for cluster in self.clusters:
             self.state_index[cluster] = {}
+            self.infectious_symptomatic_indexes[cluster] = []
+            self.infectious_asymptomatic_indexes[cluster] = []
+            self.isolating_asymptomatic_indexes[cluster] = []
+            self.isolating_symptomatic_indexes[cluster] = []
             for vaccine_group in self.vaccine_groups:
                 self.state_index[cluster][vaccine_group] = {}
                 for state in self.states:
                     self.all_states_index[state+'_'+cluster+'_'+vaccine_group] = index
                     self.state_index[cluster][vaccine_group][state] = index
                     if state in self.infectious_and_symptomatic_states:
-                        self.infectious_symptomatic_indexes.append(index)
+                        self.infectious_symptomatic_indexes[cluster].append(index)
                     if state in self.infectious_and_asymptomatic_states:
-                        self.infectious_asymptomatic_indexes.append(index)
+                        self.infectious_asymptomatic_indexes[cluster].append(index)
                     if state in self.isolating_and_symptomatic_states:
-                        self.isolating_symptomatic_indexes.append(index)
+                        self.isolating_symptomatic_indexes[cluster].append(index)
                     if state in self.isolating_and_asymptomatic_states:
-                        self.isolating_asymptomatic_indexes.append(index)
+                        self.isolating_asymptomatic_indexes[cluster].append(index)
                     if state in self.dead_states:
                         self.dead_states_indexes.append(index)
                     index += 1
@@ -207,7 +211,7 @@ class BaseScipyClusterVacModel:
     def _nesteddictvalues(self, d):
         return [index for sub_d in d.values() for index in sub_d.values()]
 
-    def foi(self, y, beta, asymptomatic_tran_mod=1, isolation_mod=1):
+    def foi(self, y, parameters, asymptomatic_tran_mod, isolation_mod):
         """Calculate force of infection (foi).
 
         Args:
@@ -219,14 +223,33 @@ class BaseScipyClusterVacModel:
         Returns:
             float: Force of infection given state variables.
         """
-        total_asymptomatic = asymptomatic_tran_mod *y[self.infectious_asymptomatic_index].sum()
-        total_symptomatic = y[self.infectious_symptomatic_index].sum()
-        total_isolating_asymptomatic = isolation_mod*asymptomatic_tran_mod *y[self.isolating_asymptomatic_index].sum()
-        total_isolating_symptomatic = isolation_mod*y[self.isolating_symptomatic_index].sum()
-        full_contribution = sum([total_asymptomatic,total_symptomatic,
-                                 total_isolating_asymptomatic,total_isolating_symptomatic])
-        total_contactable_population = self.current_population(y)
-        foi = beta * full_contribution / total_contactable_population
+        asymptomatic_tran_mod = parameters[asymptomatic_tran_mod]
+        isolation_mod = parameters[isolation_mod]
+        if 'beta' not in self.cluster_specific_params:
+            infectious_symptomatic_indexes = self._nesteddictvalues(self.infectious_symptomatic_indexes)
+            infectious_and_asymptomatic_indexes = self._nesteddictvalues(self.infectious_asymptomatic_indexes)
+            isolating_asymptomatic_indexes = self._nesteddictvalues(self.isolating_asymptomatic_indexes)
+            isolating_symptomatic_indexes = self._nesteddictvalues(self.isolating_symptomatic_indexes)
+            total_asymptomatic = asymptomatic_tran_mod *y[infectious_and_asymptomatic_indexes].sum()
+            total_symptomatic = y[infectious_symptomatic_indexes].sum()
+            total_isolating_asymptomatic = isolation_mod*asymptomatic_tran_mod *y[isolating_asymptomatic_indexes].sum()
+            total_isolating_symptomatic = isolation_mod*y[isolating_symptomatic_indexes].sum()
+            full_contribution = sum([total_asymptomatic,total_symptomatic,
+                                     total_isolating_asymptomatic,total_isolating_symptomatic])
+            total_contactable_population = self.current_population(y)
+            foi = parameters['beta'] * full_contribution / total_contactable_population
+        else:
+            foi = 0
+            for cluster in self.clusters:
+                total_asymptomatic = asymptomatic_tran_mod * y[self.infectious_asymptomatic_indexes[cluster]].sum()
+                total_symptomatic = y[self.infectious_symptomatic_indexes[cluster]].sum()
+                total_isolating_asymptomatic = (isolation_mod * asymptomatic_tran_mod *
+                                                y[self.isolating_asymptomatic_indexes[cluster]].sum())
+                total_isolating_symptomatic = isolation_mod * y[self.isolating_symptomatic_indexes[cluster]].sum()
+                full_contribution = sum([total_asymptomatic, total_symptomatic,
+                                         total_isolating_asymptomatic, total_isolating_symptomatic])
+                total_contactable_population = self.current_population(y)
+                foi += parameters['beta_'+cluster] * full_contribution / total_contactable_population
         return foi
 
     def current_population(self, y):
@@ -259,7 +282,7 @@ class BaseScipyClusterVacModel:
 
     def check_param_names_validity(self, params):
         for param_name in params.keys():
-            if param_name not in self.all_params:
+            if param_name not in self.all_parameters:
                 raise ValueError(param_name + ' is not a name given to a parameter for this model.')
             if param_name in self.params_estimated_via_piecewise_method:
                 raise AssertionError(param_name + ' was set as a parameter to be estimated via piecewise estimiation ' +
@@ -273,12 +296,9 @@ class BaseScipyClusterVacModel:
                 raise AssertionError(param +
                                      'has not been assigned a value or set up for piecewise estimation.')
 
-    def combine_parameters(self, arg_params, t=None):
+    def combine_parameters(self, arg_params):
         params = copy.deepcopy(self.params_defined_at_init)
         params.update(arg_params)
-        if t is not None:
-            for param, values in self.piecewise_est_param_values.items():
-                params[param] = values[t]
         return params
 
     def integrate(self, x0, t, full_output=False, called_in_fitting=False,
@@ -302,16 +322,18 @@ class BaseScipyClusterVacModel:
         self.piecewise_est_param_values = {param: {} for param in self.params_estimated_via_piecewise_method}
         # INTEGRATE!!! (shout it out loud, in Dalek voice)
         # determine the number of output we want
+        parameters = self.combine_parameters(params_defined_at_intergrate)
+        parameters = tuple([parameters[param] for param in self.all_parameters if param in parameters])
         if self.dok_jacobian is None: # May or may not of defined the models Jacobian
             solution, output = scipy.integrate.odeint(self.ode,
-                                                      x0, t, args=params_defined_at_intergrate,
+                                                      x0, t, args=parameters,
                                                       mu=None, ml=None,
                                                       col_deriv=False,
                                                       mxstep=10000,
                                                       full_output=True)
         else:
             solution, output = scipy.integrate.odeint(self.ode,
-                                                      x0, t, args=params_defined_at_intergrate,
+                                                      x0, t, args=parameters,
                                                       Dfun=self.jacobian,
                                                       mu=None, ml=None,
                                                       col_deriv=False,
@@ -330,13 +352,17 @@ class BaseScipyClusterVacModel:
             self.dok_jacobian = json.load(json_file)
 
 
-    def jacobian(self, y, t, **arg_params):
+    def _sorting_params(self,parameters):
+        not_piece_wise_param = [param for param in self.all_parameters
+                                if param not in self.params_estimated_via_piecewise_method]
+        return dict(zip(not_piece_wise_param, parameters))
+
+    def jacobian(self, y, t, *parameters):
         if self.dok_jacobian is None:
             raise AssertionError('Dictionary of Keys (DOK) version of jacobian needs to be loaded first.' +
                                  'Call method load_dok_jacobian.')
-
+        parameters = self._sorting_params(parameters)
         N = self.current_population(y)
-        parameters = self.combine_parameters(arg_params, t)
         y_jacobian = np.zeros(self.num_state, self.num_state)
         for coord, value in self.dok_jacobian.items():
             y_jacobian[eval(coord)] = eval(value)
@@ -347,13 +373,13 @@ class BaseScipyClusterVacModel:
         with open(json_file) as json_file:
             self.dok_diff_jacobian = json.load(json_file)
 
-    def diff_jacobian(self, y, t, **arg_params):
+
+    def diff_jacobian(self, y, t, parameters):
         if self.dok_diff_jacobian is None:
             raise AssertionError('Dictionary of Keys (DOK) version of matrix needs to be loaded first.' +
                                  'Call method load_dok_diff_jacobian.')
-
+        parameters = self._sorting_params(parameters)
         N = self.current_population(y)
-        parameters = self.combine_parameters(arg_params, t)
         y_diff_jacobian = np.zeros(self.num_state ** 2, self.num_state)
         for coord, value in self.dok_diff_jacobian.items():
             y_diff_jacobian[eval(coord)] = eval(value)
@@ -364,13 +390,12 @@ class BaseScipyClusterVacModel:
         with open(json_file) as json_file:
             self.dok_gradient = json.load(json_file)
 
-    def gradient(self, y, t, **arg_params):
+    def gradient(self, y, t, parameters):
         if self.dok_gradient is None:
             raise AssertionError('Dictionary of Keys (DOK) version of matrix needs to be loaded first.' +
                                  'Call method load_dok_gradient.')
-
+        parameters = self._sorting_params(parameters)
         N = self.current_population(y)
-        parameters = self.combine_parameters(arg_params, t)
         y_gradient = np.zeros(self.num_state, self.num_param)
         # see script deriving_MG_model_jacobian.py for where dok_matrix is derived and saved into json formate.
 
@@ -382,13 +407,12 @@ class BaseScipyClusterVacModel:
         with open(json_file) as json_file:
             self.dok_grad_jacobian = json.load(json_file)
 
-    def grad_jacobian(self, y, t, **arg_params):
+    def grad_jacobian(self, y, t, parameters):
         if self.dok_grad_jacobian is None:
             raise AssertionError('Dictionary of Keys (DOK) version of matrix needs to be loaded first.' +
                                  'Call method load_dok_grad_jacobian.')
-
+        parameters = self._sorting_params(parameters)
         N = self.current_population(y)
-        parameters = self.combine_parameters(arg_params, t)
         y_gradient_jacobian = np.zeros(self.num_state, self.num_param)
         # see script deriving_MG_model_jacobian.py for where dok_matrix is derived and saved into json formate.
 

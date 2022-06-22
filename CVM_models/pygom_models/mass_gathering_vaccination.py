@@ -15,7 +15,7 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
     infectious_states = ['P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A']
     symptomatic_states = ['M_I','F_I','M_D','F_D','H']
     isolating_states = ['M_D','F_D']
-    non_specific_params = ['theta', 'p_s', 'epsilon_1', 'epsilon_2', 'p_d', 'epsilon_3',
+    universal_params = ['theta', 'p_s', 'epsilon_1', 'epsilon_2', 'p_d', 'epsilon_3',
                            'p_h', 'gamma_I_1', 'gamma_I_2', 'gamma_A_1', 'gamma_A_2',
                            'gamma_H', 'alpha']
     cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params
