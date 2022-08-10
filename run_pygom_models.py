@@ -79,6 +79,8 @@ ve_dict['ve_hospitalisation'] = {
 ve_dict['ve_mortality'] = copy.deepcopy(ve_dict['ve_hospitalisation'])
 
 #%%
+
+fixed_params = {}
 # Putting VE dict in fixed_params
 for param, value in ve_dict['ve_infection'].items():
     fixed_params['l_'+ param ] = value

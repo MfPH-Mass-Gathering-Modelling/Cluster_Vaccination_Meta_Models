@@ -62,6 +62,7 @@ class BaseScipyClusterVacModel:
     def gen_group_structure(self, group_structure):
         self.params_estimated_via_piecewise_method = []
         self.group_transfer_dict = {}
+        self.group_transition_params_dict = {}
         if isinstance(group_structure, dict):
             self.vaccine_groups = group_structure['vaccine groups']
             self.clusters = group_structure['clusters']
@@ -71,8 +72,9 @@ class BaseScipyClusterVacModel:
             for group_transfer in group_structure:
                 cluster = group_transfer['cluster']
                 if cluster not in self.clusters:
-                    self.group_transfer_dict[cluster] = {}
                     self.clusters.append(cluster)
+                if cluster not in self.group_transfer_dict:
+                    self.group_transfer_dict[cluster] = {}
                 vaccine_group = group_transfer['vaccine group']
                 if vaccine_group not in self.vaccine_groups:
                     self.vaccine_groups.append(vaccine_group)
@@ -93,6 +95,12 @@ class BaseScipyClusterVacModel:
                 parameter = group_transfer['parameter']
                 if not isinstance(parameter, str):
                     raise TypeError(str(parameter) + ' should be of type string.')
+                if parameter not in self.group_transition_params_dict:
+                    self.group_transition_params_dict[parameter] = []
+                entry = {key: value for key, value in
+                         group_transfer.items()
+                         if key != 'parameter'}
+                self.group_transition_params_dict[parameter].append(entry)
                 self.all_parameters.add(parameter)
                 if 'piecewise targets' in group_transfer:
                     self.params_estimated_via_piecewise_method.append(parameter)
@@ -207,6 +215,22 @@ class BaseScipyClusterVacModel:
             index += 1
 
         self.num_state = index
+        for transfer_info in self.group_transition_params_dict.values():
+            for transfer_info_entry in transfer_info:
+                cluster = transfer_info_entry['cluster']
+                vaccine_group = transfer_info_entry['vaccine group']
+                states_dict = self.state_index[cluster][vaccine_group]
+                to_cluster = transfer_info_entry['to cluster']
+                to_vaccine_group = transfer_info_entry['to vaccine group']
+                to_states_dict = self.state_index[to_cluster][to_vaccine_group]
+                state_selection = transfer_info_entry['states']
+                if state_selection == 'all':
+                    transfer_info_entry['from state index'] = [states_dict.values()]
+                    transfer_info_entry['to state index'] = [to_states_dict.values()]
+                else:
+                    transfer_info_entry['from state index'] = [states_dict[state] for state in state_selection]
+                    transfer_info_entry['to state index'] = [to_states_dict[state] for state in state_selection]
+
 
     def _nesteddictvalues(self, d):
         return [index for sub_d in d.values() for index in sub_d.values()]

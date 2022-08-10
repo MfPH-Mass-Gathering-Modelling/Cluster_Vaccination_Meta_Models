@@ -81,7 +81,8 @@ class BaseMultiClusterVacConstructor:
                                    for cluster_i in self.clusters]
 
     def _attach_Params(self):
-        self.all_parameters = set(self.universal_params + self.beta_list + self.group_transition_params)
+        self.all_parameters = set(self.universal_params + self.beta_list +
+                                  self.group_transition_params_dict.keys())
         dictionary_list = [
             self.vaccine_specific_params_dict,
             self.cluster_specific_params_dict,
@@ -92,7 +93,7 @@ class BaseMultiClusterVacConstructor:
                 self.all_parameters.update(list_item)
 
     def gen_group_structure(self, group_structure):
-        self.group_transition_params = []
+        self.group_transition_params_dict = {}
         if isinstance(group_structure, dict):
             self.vaccine_groups = group_structure['vaccine groups']
             self.clusters = group_structure['clusters']
@@ -119,8 +120,12 @@ class BaseMultiClusterVacConstructor:
                     for state in states:
                         self._check_string_in_list_strings(state, 'states')
                 parameter = group_transfer['parameter']
-                if parameter not in self.group_transition_params:
-                    self.group_transition_params.append(parameter)
+                if parameter not in self.group_transition_params_dict:
+                    self.group_transition_params_dict[parameter] = []
+                entry = {key: value for key, value in
+                         group_transfer.items()
+                         if key != 'parameter'}
+                self.group_transition_params_dict[parameter].append(entry)
                 for state in states:
                     origin = state +'_' + cluster + '_' + vaccine_group
                     destination = state + '_' + to_cluster + '_' + to_vaccine_group
