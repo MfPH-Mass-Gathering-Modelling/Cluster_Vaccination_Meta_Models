@@ -5,48 +5,110 @@ Creation:
 Description: Classes for handling transfer of people between states to another at set timepoints.
     
 """
-from collections import OrderedDict
+from collections import OrderedDict, deque
 from numbers import Number
 import numpy as np
+import pandas as pd
 from warnings import warn
+import copy
 
 class SimModelsWithTranfersAtTs:
 
+    def __init__(self, transfer_info_dict):
+        self.master_event_queue = TransferEventQueue(transfer_info_dict)
 
-    def __init__(self, sim_function, transfer_indexes, transfer_info_dict, simulation_step=1):
-        self.event_queue = TransferEventQueue(transfer_indexes, transfer_info_dict, simulation_step)
-        self.sim_function = sim_function
+    def run_simulation(self, y0, func, start_time, end_time, simulation_step=1):
+        if not all(time % simulation_step == 0
+                   for time in self.event_queue.keys()):
+            raise ValueError('All time points for events must be divisible by simulation_step, leaving no remainder.')
+        event_queue = copy.deepcopy(self.master_event_queue)
+        event_queue.prep_queue_for_sim_time(start_time, end_time)
+        tranfers_list = []
+        y = []
+        current_time = start_time
+        solution_at_t = y0
+        while event_queue.not_empty():
+            next_time, event = event_queue.poptop()
+            if current_time != next_time:
+                current_t_range = np.arange(current_time, next_time, simulation_step)
+            y_over_current_t_range = func(solution_at_t, current_t_range)
+            current_time = next_time
+            solution_at_t = y_over_current_t_range[-1,:]
+            y_over_current_t_range = np.delete(y_over_current_t_range, -1, 0)
+            y.append(y_over_current_t_range)
+            transfered = event.process(self, solution_at_t, current_time)
+            transfers_entry = {'time':current_time,
+                               'transfered':transfered,
+                               'event':event.name}
+            tranfers_list.append(transfers_entry)
+        y = np.concatenate(y, axis=0)
+        transfers_df = pd.DataFrame(tranfers_list)
+        return y, transfers_df
+            
+
+
 
 
 class TransferEventQueue:
-    def __init__(self, transfer_indexes, transfer_info_dict, simulation_step):
-        self.data = OrderedDict()
-
-        if initial_data is not None:
-            self.data.update(initial_data)
-        if kwargs:
-            self.data.update(kwargs)
-
-    def enqueue(self, item):
-        key, value = item
-        if key in self.data:
-            self.data.move_to_end(key)
-        self.data[key] = value
+    def __init__(self, transfer_info_dict):
+        unordered_que = {}
+        for event_name, event_information in transfer_info_dict.items():
+            event_information = copy.deepcopy(event_information) # We don't want to alter the original.
+            times = set(event_information['times'])
+            del event_information['times']
+            event = Event(event_name, **event_information)
+            times_already_in_queue = set(unordered_que.keys()) & times
+            if times_already_in_queue:
+                for time in times_already_in_queue:
+                    if isinstance(unordered_que[time], Event):
+                        raise warn('Concuring events at time ' + str(time) + '.' +
+                                   'Will process events occuring at same time in order of occurance in transfer_info_dict.')
+                        unordered_que[time] = deque([unordered_que[time], event])
+                    else:
+                        unordered_que[time].append(event)
+                times -= times_already_in_queue
+            unordered_que.update({time: event for time in times})
+        self.queue = OrderedDict(sort(unordered_que.items()))
 
     def poptop(self):
-        try:
-            return self.data.popitem(last=False)
-        except KeyError:
-            print("Empty queue")
+        if self.queue: # OrderedDicts if not empty are seen as True in bool statements.
+            next_item = next(iter(self.queue.values()))
+            if isinstance(next_item, deque):
+                next_time = next(iter(self.queue.keys()))
+                next_event = next_item.popleft()
+                if not next_item:
+                    self.queue.popitem(last=False)
+                return next_time, next_event
+            else:
+                return self.queue.popitem(last=False)
+        else:
+            raise KeyError("Empty event queue")
 
-    def popbottom(self):
-        try:
-            return self.data.popitem(last=True)
-        except KeyError:
-            print("Empty queue")
+    def prep_queue_for_sim_time(self, start_time, end_time):
+        first_event_time = next(iter(self.queue.keys()))
+        last_event_time = next(reversed(self.queue.keys()))
+        if first_event_time < start_time and last_event_time > last_event_time:
+            self.queue = OrderedDict({time: item for time, item
+                                      in self.queue.items()
+                                      if time >= start_time and time <= end_time})
+        elif first_event_time < start_time:
+            self.queue = OrderedDict({time: item for time, item
+                                      in self.queue.items()
+                                      if time >= start_time})
+        elif last_event_time > last_event_time:
+            self.queue = OrderedDict({time: item for time, item
+                                      in self.queue.items()
+                                      if time <= end_time})
+        if end_time in self.queue:
+            self.queue[end_time].append(NullEvent)
+        else:
+            self.queue[end_time] = NullEvent
 
-    def __len__(self):
-        return len(self.data)
+    def not_empty(self):
+        return bool(self.queue)
+
+    def __time_points__(self):
+        return len(self.queue)
 
     def __repr__(self):
         return f"Queue({self.data.items()})"
@@ -96,7 +158,7 @@ class Event:
         self.to_index = to_index
 
 
-    def process(self, solution_at_t, time, output_transfers=False):
+    def process(self, solution_at_t, time, return_total_effected=True):
         if self.amount is not None:
             transfers = np.repeat(self.amount, self.number_of_elements)
             if self.from_index is not None:
@@ -112,13 +174,12 @@ class Event:
             solution_at_t[self.to_index] += transfers
         if self.from_index is not None:
             solution_at_t[self.from_index] -= transfers
-            if self.amount is not None:
-                index_negative = np.where(solution_at_t < 0)
-                if index
-        if output_transfers:
-            return transfers
+        if return_total_effected:
+            return transfers.sum()
 
-
+class NullEvent:
+    def process(self, solution_at_t, time, return_total_effected=True):
+        pass
 
 
 
