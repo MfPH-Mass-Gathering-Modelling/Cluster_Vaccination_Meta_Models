@@ -7,7 +7,7 @@ Description:
 """
 import numpy as np
 import pandas as pd
-import copy
+from numbers import Number
 import json
 import scipy
 import functools
@@ -23,8 +23,7 @@ class BaseScipyClusterVacModel:
     vaccine_specific_params = []
     cluster_specific_params = []
 
-    def __init__(self, starting_population,  group_structure, **params_defined_at_init):
-        self.starting_population = starting_population
+    def __init__(self, group_structure):
         self.all_parameters = set(self.universal_params)
         self.gen_group_structure(group_structure)
         self.all_parameters.update([param + '_' + vaccine_group
@@ -41,8 +40,8 @@ class BaseScipyClusterVacModel:
                                     for param in self.vaccine_specific_params
                                     if param in self.cluster_specific_params])
         self.all_parameters = sorted(self.all_parameters)
-        self.check_param_names_validity(params_defined_at_init)
-        self.params_defined_at_init = params_defined_at_init
+        non_piece_wise_params_names = set(self.all_parameters)-set(self.params_estimated_via_piecewise_method)
+        self.non_piece_wise_params_names = sorted(list(non_piece_wise_params_names))
         self._sorting_states()
         # self.ode_calls_dict = {}
         # self.jacobian_calls_dict = {}
@@ -51,6 +50,8 @@ class BaseScipyClusterVacModel:
         self.dok_gradient = None
         self.dok_gradients_jacobian = None
         self._lossObj = None
+        self._non_piecewise_params = None
+        self._starting_population = None
         self._initial_values = None
         self._initial_time = None
         self._observations = None
@@ -58,6 +59,8 @@ class BaseScipyClusterVacModel:
         self._targetParam = None
         self._time_frame = None
         self.num_param = len(self.all_parameters)
+        self.num_piece_wise_params = len(self.params_estimated_via_piecewise_method)
+        self.num_non_piece_wise_params = self.num_param - self.num_piece_wise_params
 
     def gen_group_structure(self, group_structure):
         self.params_estimated_via_piecewise_method = []
@@ -70,20 +73,20 @@ class BaseScipyClusterVacModel:
             self.vaccine_groups = []
             self.clusters = []
             for group_transfer in group_structure:
-                cluster = group_transfer['cluster']
+                cluster = group_transfer['from_cluster']
                 if cluster not in self.clusters:
                     self.clusters.append(cluster)
                 if cluster not in self.group_transfer_dict:
                     self.group_transfer_dict[cluster] = {}
-                vaccine_group = group_transfer['vaccine group']
+                vaccine_group = group_transfer['from_vaccine_group']
                 if vaccine_group not in self.vaccine_groups:
                     self.vaccine_groups.append(vaccine_group)
                 if vaccine_group not in self.group_transfer_dict[cluster]:
                     self.group_transfer_dict[cluster][vaccine_group] = []
-                to_cluster = group_transfer['to cluster']
+                to_cluster = group_transfer['to_cluster']
                 if to_cluster not in self.clusters:
                     self.clusters.append(to_cluster)
-                to_vaccine_group = group_transfer['to vaccine group']
+                to_vaccine_group = group_transfer['to_vaccine_group']
                 if to_vaccine_group not in self.vaccine_groups:
                     self.vaccine_groups.append(to_vaccine_group)
 
@@ -108,7 +111,7 @@ class BaseScipyClusterVacModel:
                         group_transfer['piecewise targets'] = group_transfer['piecewise targets'].tolist()
                 entry = {key: value
                          for key, value in group_transfer.items()
-                         if key not in ['cluster', 'vaccine group']}
+                         if key not in ['from_cluster', 'from_vaccine_group']}
                 self.group_transfer_dict[cluster][vaccine_group].append(entry)
 
 
@@ -142,8 +145,8 @@ class BaseScipyClusterVacModel:
                     else:
                         param_val = params[parameter]
 
-                    to_cluster = group_transfer['to cluster']
-                    to_vaccine_group = group_transfer['to vaccine group']
+                    to_cluster = group_transfer['to_cluster']
+                    to_vaccine_group = group_transfer['to_vaccine_group']
                     to_index_dict = self.state_index[to_cluster][to_vaccine_group]
                     for state in group_transfer['states']:
                         from_index = from_index_dict[state]
@@ -217,19 +220,19 @@ class BaseScipyClusterVacModel:
         self.num_state = index
         for transfer_info in self.group_transition_params_dict.values():
             for transfer_info_entry in transfer_info:
-                cluster = transfer_info_entry['cluster']
-                vaccine_group = transfer_info_entry['vaccine group']
+                cluster = transfer_info_entry['from_cluster']
+                vaccine_group = transfer_info_entry['from_vaccine_group']
                 states_dict = self.state_index[cluster][vaccine_group]
-                to_cluster = transfer_info_entry['to cluster']
-                to_vaccine_group = transfer_info_entry['to vaccine group']
+                to_cluster = transfer_info_entry['to_cluster']
+                to_vaccine_group = transfer_info_entry['to_vaccine_group']
                 to_states_dict = self.state_index[to_cluster][to_vaccine_group]
                 state_selection = transfer_info_entry['states']
                 if state_selection == 'all':
-                    transfer_info_entry['from state index'] = [states_dict.values()]
-                    transfer_info_entry['to state index'] = [to_states_dict.values()]
+                    transfer_info_entry['from_index'] = [states_dict.values()]
+                    transfer_info_entry['to_index'] = [to_states_dict.values()]
                 else:
-                    transfer_info_entry['from state index'] = [states_dict[state] for state in state_selection]
-                    transfer_info_entry['to state index'] = [to_states_dict[state] for state in state_selection]
+                    transfer_info_entry['from_index'] = [states_dict[state] for state in state_selection]
+                    transfer_info_entry['to_index'] = [to_states_dict[state] for state in state_selection]
 
 
     def _nesteddictvalues(self, d):
@@ -278,9 +281,9 @@ class BaseScipyClusterVacModel:
 
     def current_population(self, y):
         if self.dead_states_indexes: # empty lists default to false boolean values.
-            return self.starting_population - y[self.dead_states_indexes].sum()
+            return self._starting_population - y[self.dead_states_indexes].sum()
         else:
-            return self.starting_population
+            return self._starting_population
 
     def instantaneous_transfer(self, population_transitioning, population, t=None):
         if population_transitioning > population:
@@ -303,30 +306,51 @@ class BaseScipyClusterVacModel:
             ans = np.log(growth)
         return ans
 
+    @property
+    def non_piecewise_params(self):
+        """
+        Returns
+        -------
+        list
+            A list which contains tuple of two elements,
+            (:mod:`sympy.core.symbol`, numeric)
 
-    def check_param_names_validity(self, params):
-        for param_name in params.keys():
+        """
+        return self._non_piecewise_params
+
+    @non_piecewise_params.setter
+    def non_piecewise_params(self, parameters):
+        if not isinstance(parameters, dict):
+            raise TypeError('Currently non non_piecewise_params must be entered as a dict.')
+        # we assume that the key of the dictionary is a string and
+        # the value can be a single value or a distribution
+        if len(parameters) > self.num_non_piece_wise_params:
+            raise Exception("Too many input parameters, should be of length "
+                            + str(self.num_non_piece_wise_params)+ '.')
+        if len(parameters) < self.num_non_piece_wise_params:
+            raise Exception("Too few input parameters, should be of length "
+                            + str(self.num_non_piece_wise_params)+ '.')
+        for param_name, value in parameters.items():
             if param_name not in self.all_parameters:
                 raise ValueError(param_name + ' is not a name given to a parameter for this model.')
             if param_name in self.params_estimated_via_piecewise_method:
                 raise AssertionError(param_name + ' was set as a parameter to be estimated via piecewise estimiation ' +
                                      'at the initialization of this model.')
+            if not isinstance(value, Number):
+                raise TypeError(param_name + ' is not a number type.')
+        # this must be sorted alphanumerically.
+        self._non_piecewise_params = {key: value for key, value in sorted(parameters.items())}
 
-    def check_all_params_represented(self, params):
-        check_list = (list(params.keys()) + list(self.params_defined_at_init.keys()) +
+    def check_all_params_represented(self):
+        check_list = (list(self.non_piecewise_params.keys()) +
                       self.params_estimated_via_piecewise_method)
         for param in self.all_parameters:
             if param not in check_list:
                 raise AssertionError(param +
                                      'has not been assigned a value or set up for piecewise estimation.')
 
-    def combine_parameters(self, arg_params):
-        params = copy.deepcopy(self.params_defined_at_init)
-        params.update(arg_params)
-        return params
 
-    def integrate(self, x0, t, full_output=False, called_in_fitting=False,
-                  **params_defined_at_intergrate):
+    def integrate(self, x0, t, full_output=False, called_in_fitting=False):
         '''
         A wrapper on top of :mod:`odeint <scipy.integrate.odeint>` using
         :class:`DeterministicOde <pygom.model.DeterministicOde>`.
@@ -341,23 +365,22 @@ class BaseScipyClusterVacModel:
         '''
         if not called_in_fitting: # If fitting model these checks should be done in fitting method.
             # This would avoid unnecessary error checks.
-            self.check_param_names_validity(params_defined_at_intergrate)
-            self.check_all_params_represented(params_defined_at_intergrate)
+            self.check_all_params_represented()
+        self._starting_population = sum(x0)
         self.piecewise_est_param_values = {param: {} for param in self.params_estimated_via_piecewise_method}
         # INTEGRATE!!! (shout it out loud, in Dalek voice)
         # determine the number of output we want
-        parameters = self.combine_parameters(params_defined_at_intergrate)
-        parameters = tuple([parameters[param] for param in self.all_parameters if param in parameters])
+        args = tuple(self.non_piecewise_params.values())
         if self.dok_jacobian is None: # May or may not of defined the models Jacobian
             solution, output = scipy.integrate.odeint(self.ode,
-                                                      x0, t, args=parameters,
+                                                      x0, t, args=args,
                                                       mu=None, ml=None,
                                                       col_deriv=False,
                                                       mxstep=10000,
                                                       full_output=True)
         else:
             solution, output = scipy.integrate.odeint(self.ode,
-                                                      x0, t, args=parameters,
+                                                      x0, t, args=args,
                                                       Dfun=self.jacobian,
                                                       mu=None, ml=None,
                                                       col_deriv=False,
@@ -376,10 +399,8 @@ class BaseScipyClusterVacModel:
             self.dok_jacobian = json.load(json_file)
 
 
-    def _sorting_params(self,parameters):
-        not_piece_wise_param = [param for param in self.all_parameters
-                                if param not in self.params_estimated_via_piecewise_method]
-        return dict(zip(not_piece_wise_param, parameters))
+    def _sorting_params(self, parameters):
+        return dict(zip(self.non_piece_wise_params_names, parameters))
 
     def jacobian(self, y, t, *parameters):
         if self.dok_jacobian is None:

@@ -26,31 +26,31 @@ wanning_vaccine_efficacy_states = 'all'
 #%%
 # Lets start off by a general population cluster
 only_cluster = 'general_population'
-to_and_from_cluster = {'cluster': only_cluster, 'to cluster': only_cluster}
+to_and_from_cluster = {'from_cluster': only_cluster, 'to_cluster': only_cluster}
 first_dose = {**to_and_from_cluster,
-              'vaccine group': 'unvaccinated', 'to vaccine group': 'first_dose_delay',
+              'from_vaccine_group': 'unvaccinated', 'to_vaccine_group': 'first_dose_delay',
               'parameter': 'nu_1', 'states': vaccinable_states,
                'piecewise targets': first_vac_dose}
 first_dose_effective = {**to_and_from_cluster,
-                        'vaccine group': 'first_dose_delay', 'to vaccine group': 'first_dose_effective',
+                        'from_vaccine_group': 'first_dose_delay', 'to_vaccine_group': 'first_dose_effective',
                         'parameter': 'nu_d', 'states': delay_vaccine_efficacy_states}
 
 second_dose = {**to_and_from_cluster,
-               'vaccine group': 'first_dose_effective', 'to vaccine group': 'second_dose_delay',
+               'from_vaccine_group': 'first_dose_effective', 'to_vaccine_group': 'second_dose_delay',
                'parameter': 'nu_2', 'states': vaccinable_states,
                'piecewise targets': second_vac_dose}
 second_dose_effective = {**to_and_from_cluster,
-                         'vaccine group': 'second_dose_delay', 'to vaccine group': 'second_dose_effective',
+                         'from_vaccine_group': 'second_dose_delay', 'to_vaccine_group': 'second_dose_effective',
                          'parameter': 'nu_d', 'states': delay_vaccine_efficacy_states}
 second_dose_waned = {**to_and_from_cluster,
-                     'vaccine group': 'second_dose_effective', 'to vaccine group': 'waned',
+                     'from_vaccine_group': 'second_dose_effective', 'to_vaccine_group': 'waned',
                      'parameter': 'nu_w', 'states': wanning_vaccine_efficacy_states}
 third_dose = {**to_and_from_cluster,
-              'vaccine group': 'waned', 'to vaccine group': 'third_dose_delay',
+              'from_vaccine_group': 'waned', 'to_vaccine_group': 'third_dose_delay',
               'parameter': 'nu_3', 'states': vaccinable_states,
               'piecewise targets': third_vac_dose}
 third_dose_effective = {**to_and_from_cluster,
-                        'vaccine group': 'third_dose_delay', 'to vaccine group': 'third_dose_effective',
+                        'from_vaccine_group': 'third_dose_delay', 'to_vaccine_group': 'third_dose_effective',
                         'parameter': 'nu_d', 'states': delay_vaccine_efficacy_states}
 
 group_info = [first_dose, first_dose_effective,
@@ -58,10 +58,6 @@ group_info = [first_dose, first_dose_effective,
               third_dose, third_dose_effective
               ]
 
-group_info = [first_dose, first_dose_effective,
-              second_dose, second_dose_effective, second_dose_waned,
-              third_dose, third_dose_effective
-              ]
 
 
 #%%

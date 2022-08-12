@@ -101,16 +101,16 @@ class BaseMultiClusterVacConstructor:
             self.vaccine_groups = []
             self.clusters = []
             for group_transfer in group_structure:
-                cluster = group_transfer['cluster']
+                cluster = group_transfer['from_cluster']
                 if cluster not in self.clusters:
                     self.clusters.append(cluster)
-                vaccine_group = group_transfer['vaccine group']
+                vaccine_group = group_transfer['from_vaccine_group']
                 if vaccine_group not in self.vaccine_groups:
                     self.vaccine_groups.append(vaccine_group)
-                to_cluster = group_transfer['to cluster']
+                to_cluster = group_transfer['to_cluster']
                 if to_cluster not in self.clusters:
                     self.clusters.append(to_cluster)
-                to_vaccine_group = group_transfer['to vaccine group']
+                to_vaccine_group = group_transfer['to_vaccine_group']
                 if to_vaccine_group not in self.vaccine_groups:
                     self.vaccine_groups.append(to_vaccine_group)
                 states = group_transfer['states']

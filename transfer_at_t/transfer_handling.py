@@ -12,14 +12,14 @@ import pandas as pd
 from warnings import warn
 import copy
 
-class SimModelsWithTranfersAtTs:
+class TranfersAtTsScafold:
 
     def __init__(self, transfer_info_dict):
         self.master_event_queue = TransferEventQueue(transfer_info_dict)
 
-    def run_simulation(self, y0, func, start_time, end_time, simulation_step=1):
+    def run_simulation(self, func, y0,  end_time, start_time=0, simulation_step=1):
         if not all(time % simulation_step == 0
-                   for time in self.event_queue.keys()):
+                   for time in self.master_event_queue.times):
             raise ValueError('All time points for events must be divisible by simulation_step, leaving no remainder.')
         event_queue = copy.deepcopy(self.master_event_queue)
         event_queue.prep_queue_for_sim_time(start_time, end_time)
@@ -27,20 +27,25 @@ class SimModelsWithTranfersAtTs:
         y = []
         current_time = start_time
         solution_at_t = y0
+        next_time, event = event_queue.poptop()
         while event_queue.not_empty():
-            next_time, event = event_queue.poptop()
             if current_time != next_time:
                 current_t_range = np.arange(current_time, next_time, simulation_step)
-            y_over_current_t_range = func(solution_at_t, current_t_range)
-            current_time = next_time
-            solution_at_t = y_over_current_t_range[-1,:]
-            y_over_current_t_range = np.delete(y_over_current_t_range, -1, 0)
-            y.append(y_over_current_t_range)
-            transfered = event.process(self, solution_at_t, current_time)
+                y_over_current_t_range = func(solution_at_t, current_t_range)
+                solution_at_t = y_over_current_t_range[-1, :]
+                y.append(y_over_current_t_range)
+            transfered = event.process(solution_at_t, current_time)
             transfers_entry = {'time':current_time,
                                'transfered':transfered,
                                'event':event.name}
             tranfers_list.append(transfers_entry)
+            current_time = next_time
+            next_time, event = event_queue.poptop()
+
+        if current_time != end_time:
+            current_t_range = np.arange(current_time, end_time, simulation_step)
+            y_over_current_t_range = func(solution_at_t, current_t_range)
+            y.append(y_over_current_t_range)
         y = np.concatenate(y, axis=0)
         transfers_df = pd.DataFrame(tranfers_list)
         return y, transfers_df
@@ -61,14 +66,14 @@ class TransferEventQueue:
             if times_already_in_queue:
                 for time in times_already_in_queue:
                     if isinstance(unordered_que[time], Event):
-                        raise warn('Concuring events at time ' + str(time) + '.' +
-                                   'Will process events occuring at same time in order of occurance in transfer_info_dict.')
+                        warn('Concuring events at time ' + str(time) + '.' +
+                             'Will process events occuring at same time in order of occurance in transfer_info_dict.')
                         unordered_que[time] = deque([unordered_que[time], event])
                     else:
                         unordered_que[time].append(event)
                 times -= times_already_in_queue
             unordered_que.update({time: event for time in times})
-        self.queue = OrderedDict(sort(unordered_que.items()))
+        self.queue = OrderedDict(sorted(unordered_que.items()))
 
     def poptop(self):
         if self.queue: # OrderedDicts if not empty are seen as True in bool statements.
@@ -99,13 +104,13 @@ class TransferEventQueue:
             self.queue = OrderedDict({time: item for time, item
                                       in self.queue.items()
                                       if time <= end_time})
-        if end_time in self.queue:
-            self.queue[end_time].append(NullEvent)
-        else:
-            self.queue[end_time] = NullEvent
 
     def not_empty(self):
         return bool(self.queue)
+
+    @property
+    def times(self):
+        return self.queue.keys()
 
     def __time_points__(self):
         return len(self.queue)
@@ -177,9 +182,7 @@ class Event:
         if return_total_effected:
             return transfers.sum()
 
-class NullEvent:
-    def process(self, solution_at_t, time, return_total_effected=True):
-        pass
+
 
 
 

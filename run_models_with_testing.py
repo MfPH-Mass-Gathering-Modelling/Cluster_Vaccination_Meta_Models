@@ -18,6 +18,8 @@ import json
 # %%
 # import model
 from CVM_models.pure_python_models.mass_gathering_piecewise_vaccination import MassGatheringModel
+# import transfer class
+from transfer_at_t.transfer_handling import TranfersAtTsScafold
 
 #%%
 # get model meta population structure
@@ -32,14 +34,9 @@ group_info = json.loads(group_info)
 
 #%%
 # Initialise model
-# Ontario’s population reached 14,755,211 on January 1, 2021
-# https://www.ontario.ca/page/ontario-demographic-quarterly-highlights-fourth-quarter-2020#:~:text=Ontario’s%20population%20reached%2014%2C755%2C211%20on,quarter%20of%20the%20previous%20year..
-starting_population = 10000
 
 
-
-#%%
-mg_model = MassGatheringModel(starting_population, group_info)
+mg_model = MassGatheringModel(group_info)
 
 #%%
 # If available attach Jacobian. Note this has to avaluated for every different meta-population structure.
@@ -53,8 +50,9 @@ mg_model = MassGatheringModel(starting_population, group_info)
 
 # %%
 # Test parameter values
-beta = 1.759782,  # may change conform to Ontario's 1st wave see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8454019/pdf/CCDR-47-329.pdf
+beta = 1.759782  # may change conform to Ontario's 1st wave see https://www.ncbi.nlm.nih.gov/pmc/articles/PMC8454019/pdf/CCDR-47-329.pdf
 kappa = 0.25
+nu = 0 # Assume no new vaccinations.
 beta_for_test_positive = beta*kappa
 test_params = {
     # Test parameter values - Vaccination parameters
@@ -93,6 +91,9 @@ test_params = {
     'beta_PCR_positive': beta_for_test_positive,
     'beta_LFD_true_positive': beta_for_test_positive,
     'theta':0.342,
+    'nu_1':nu,
+    'nu_2':nu,
+    'nu_3':nu,
     'nu_d':1/14,
     'nu_w': 1/84,
     'epsilon_1':0.5988023952,
@@ -108,99 +109,71 @@ test_params = {
     'gamma_H':0.0826446281,
     'alpha':1/(6*28), # assumin 6 months natural immunity
     'kappa_D':kappa,
-    'omega':1
+    'omega': 1,
+    'tau_A': 0,
+    'tau_G': 0,
+    'iota':1/10
 }
 
 
-#%%
-# Get Ontario's vaccination data
-from data_extraction.vaccination_data import ontario
-vac_data = ontario()
-first_vac_dose = vac_data.previous_day_at_least_one
-second_vac_dose = vac_data.previous_day_fully_vaccinated
-third_vac_dose = vac_data.previous_day_3doses
-
-
+mg_model.non_piecewise_params = test_params
 
 #%%
-# Create Test population lets assume no infections prior to vaccination program and 10 infected arrive.
+# Setting up population
+# Qatar's population 2021
+# https://data.worldbank.org/indicator/SP.POP.TOTL?locations=QA
+qatars_population = 2930524
+# From Qatars vaccination data enter populations
+full_dose = 2751485 # https://coronavirus.jhu.edu/region/qatar
+booster_dose = 1843632 # https://covid19.moph.gov.qa/EN/Pages/Vaccination-Program-Data.aspx
+unvaccinated = qatars_population - full_dose
+
 y0 = np.zeros(mg_model.num_state)
-infection_seed = 1
-y0[0] = starting_population-infection_seed
-y0[1] = infection_seed
-t = range(len(third_vac_dose)-5)
+# for simplicity lets assume no one has had infection in the last 6 months 
+state_being_populated = 'S'
+y0[mg_model.state_index['general_population']['unvaccinated'][state_being_populated ]] = unvaccinated
+# Lets assume that everybody who has had a full dose is waned.
+y0[mg_model.state_index['general_population']['waned'][state_being_populated ]] = full_dose
+# And that all booster doses have taken effect.
+y0[mg_model.state_index['general_population']['third_dose_effective'][state_being_populated]] = booster_dose 
+
+# Add some early stage infecteds to unvaccinated population
+infection_seed = 100
+y0[mg_model.state_index['general_population']['unvaccinated']['E']] = infection_seed
+
+
+#%%
+# Setting up transfer infomation for people being tested
+# need to know model end time
+end_time = 100
+lfd_sensitivity = 0.78 # https://bmcinfectdis.biomedcentral.com/articles/10.1186/s12879-021-06528-3#:~:text=This%20systematic%20review%20has%20identified,one%20single%20centred%20trial%20(BD
+lfd_times = range(0,end_time,2)
+lfd_transfer_info = mg_model.group_transition_params_dict['tau_A']
+lfd_from_index = []
+lfd_to_index = []
+for vaccine_group_transfer_info in lfd_transfer_info:
+    lfd_from_index += vaccine_group_transfer_info['from_index']
+    lfd_to_index +=  vaccine_group_transfer_info['to_index']
+transfer_info_dict = {'LFD test': {'proportion': lfd_sensitivity,
+                                   'from_index': lfd_from_index,
+                                   'to_index': lfd_to_index,
+                                   'times': lfd_times}}
+rtpcr_sensitivity = 0.96 # https://pubmed.ncbi.nlm.nih.gov/34856308/
+rtpcr_transfer_info = mg_model.group_transition_params_dict['tau_G']
+rtpcr_times = range(0,end_time,7)
+rtpcr_from_index = []
+rtpcr_to_index = []
+for vaccine_group_transfer_info in rtpcr_transfer_info:
+    rtpcr_from_index += vaccine_group_transfer_info['from_index']
+    rtpcr_to_index += vaccine_group_transfer_info['to_index']
+transfer_info_dict['RTPCR test'] = {'proportion': rtpcr_sensitivity,
+                                    'from_index': rtpcr_from_index,
+                                    'to_index': rtpcr_to_index,
+                                    'times': rtpcr_times}
+
+transfers_scafold = TranfersAtTsScafold(transfer_info_dict)
 
 #%%
 # Runninng mg_model
-sol = mg_model.integrate(y0, t, **test_params)
+solution, transfers_df = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
 
-#%%
-# Checking mg_model is working as it should.
-
-multi_columns = []
-for cluster, sub_dict in mg_model.state_index.items():
-    if cluster != 'observed_states':
-        for vaccine_group, state_dict in sub_dict.items():
-            for state in state_dict.keys():
-                multi_columns.append((cluster, vaccine_group, state))
-    else:
-        for state in sub_dict.keys():
-            multi_columns.append((cluster, None, state))
-
-sol_df = pd.DataFrame(sol, index=vac_data['report_date'][t].tolist())
-sol_df.columns = pd.MultiIndex.from_tuples(multi_columns)
-
-#%% Conversion of dataframe for use in seaborn plotting package
-sol_melted = pd.melt(sol_df, ignore_index=False)
-sol_line_list = sol_melted.reset_index()
-sol_line_list.columns = ['date','cluster', 'vaccine_group','state','population']
-sol_line_list.replace({'observed_states':'acumelated_totals'},inplace=True)
-
-
-#%%
-#Plotting graph of states accross vaccine groups
-graph_states_accross_groups = sns.FacetGrid(sol_line_list, col='vaccine_group',  hue='state', col_wrap=3)
-graph_states_accross_groups.map(sns.lineplot, 'date', 'population')
-graph_states_accross_groups.add_legend()
-plt.show()
-
-#%%
-#Plotting graph of vaccine groups accross states
-graph_groups_accross_states = sns.FacetGrid(sol_line_list, hue='vaccine_group',  col='state', col_wrap=3)
-graph_groups_accross_states.map(sns.lineplot, 'date', 'population')
-graph_groups_accross_states.add_legend()
-plt.show()
-
-
-
-#%%
-# Plotting graph of vaccination totals
-sol_vaccination_totals = sol_df.groupby(level=1,axis=1).sum()
-data_df = vac_data.iloc[t]
-plot, axes = plt.subplots(4, 1, sharex=True)
-plt.xticks(rotation=45)
-axes[0].plot(sol_vaccination_totals.index, sol_vaccination_totals.unvaccinated,color='black')
-axes[0].scatter(data_df.report_date,data_df.unvaccinated,color='red')
-axes[1].plot(sol_vaccination_totals.index, sol_vaccination_totals[['first_dose_delay',
-                                                                   'first_dose_effective']].sum(axis=1),color='black')
-axes[1].scatter(data_df.report_date,data_df.total_individuals_partially_vaccinated,color='yellow')
-axes[2].plot(sol_vaccination_totals.index, sol_vaccination_totals[['second_dose_delay',
-                                                                   'second_dose_effective',
-                                                                   'waned']].sum(axis=1),color='black')
-axes[2].scatter(data_df.report_date,data_df.total_individuals_fully_vaccinated,color='blue')
-axes[3].plot(sol_vaccination_totals.index, sol_vaccination_totals[['third_dose_delay',
-                                                                   'third_dose_effective']].sum(axis=1),color='black')
-axes[3].scatter(data_df.report_date,data_df.total_individuals_3doses,color='green')
-plt.show()
-# In terms of progression through vaccination groups everything seems to work.
-
-#%%
-#Plotting graph of state totals
-sol_state_totals = sol_df.groupby(level=2,axis=1).sum()
-plot, axes = plt.subplots(len(mg_model.states), 1, sharex=True)
-plt.xticks(rotation=45)
-axes_index = 0
-for state in mg_model.states:
-    axes[axes_index].plot(sol_state_totals.index, sol_state_totals[state],color='black')
-    axes_index += 1
-plt.show()
