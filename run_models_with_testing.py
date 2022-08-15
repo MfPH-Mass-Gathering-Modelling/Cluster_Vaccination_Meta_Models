@@ -8,11 +8,12 @@ Description: Example code for running piecewise vaccination mass gathering model
 
 #%%
 # import packages
-import pandas as pd
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
+import copy
 
 
 # %%
@@ -20,7 +21,7 @@ import json
 from CVM_models.pure_python_models.mass_gathering_piecewise_vaccination import MassGatheringModel
 # import transfer class
 from transfer_at_t.transfer_handling import TranfersAtTsScafold
-
+from cleaning_up_results.results_to_dfs import results_array_to_df, results_df_pivoted
 #%%
 # get model meta population structure
 structures_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/'+
@@ -147,7 +148,7 @@ y0[mg_model.state_index['general_population']['unvaccinated']['E']] = infection_
 # need to know model end time
 end_time = 100
 lfd_sensitivity = 0.78 # https://bmcinfectdis.biomedcentral.com/articles/10.1186/s12879-021-06528-3#:~:text=This%20systematic%20review%20has%20identified,one%20single%20centred%20trial%20(BD
-lfd_times = range(0,end_time,2)
+lfd_times = range(0,end_time,3)
 lfd_transfer_info = mg_model.group_transition_params_dict['tau_A']
 lfd_from_index = []
 lfd_to_index = []
@@ -177,3 +178,60 @@ transfers_scafold = TranfersAtTsScafold(transfer_info_dict)
 # Runninng mg_model
 solution, transfers_df = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
 
+#%%
+# Checking mg_model is working as it should.
+
+
+sol_df = results_array_to_df(solution, mg_model.state_index)
+
+
+#%% Conversion of dataframe for use in seaborn plotting package
+
+sol_pivoted = results_df_pivoted(sol_df)
+
+
+
+#%%
+#Plotting graph of states accross vaccine groups
+graph_states_accross_groups = sns.FacetGrid(sol_pivoted, col='cluster', row='state', sharey=False)
+graph_states_accross_groups.map(sns.lineplot, 'time', 'population')
+graph_states_accross_groups.add_legend()
+plt.show()
+
+
+#%%
+# Lets check that susceptible and early stage infections for tested cluster seen in the later part of the simulation
+# are those who have lost natural immunity. This can be done by setting wanning of immunity to 0.
+params_0_alpha = copy.deepcopy(test_params)
+params_0_alpha['alpha'] = 0
+mg_model.non_piecewise_params = params_0_alpha
+solution_0_alpha, transfers_df = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
+sol_0_alpha_df = results_array_to_df(solution_0_alpha, mg_model.state_index)
+sol_0_alpha_pivoted = results_df_pivoted(sol_0_alpha_df)
+graph_states_accross_groups = sns.FacetGrid(sol_0_alpha_pivoted, col='cluster', row='state', sharey=False)
+graph_states_accross_groups.map(sns.lineplot, 'time', 'population')
+graph_states_accross_groups.add_legend()
+plt.show()
+
+
+# Great now one in the test clusters who are susceptible or in an early stage of infection.
+
+#%%
+# Check that without people being transfered between compartments does TranfersAtTsScafold.run_simulation produce
+# the same restuls as model.intergrate.
+
+# Set all transfer events to 0 being transfered.
+for event in transfers_scafold.event_names():
+    transfers_scafold.change_transfer_event_proportion(event, proportion=0)
+
+mg_model.non_piecewise_params = test_params
+scaflod_solution, transfers_df, time_ranges_of_sols = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
+scafold_times = np.hstack(time_ranges_of_sols)
+
+time = np.arange(0,end_time+1,1)
+intergrate_solution = mg_model.integrate(y0,time)
+
+intergrate_solution_df = results_array_to_df(intergrate_solution, mg_model.state_index)
+intergrate_solution_df['time'] = time
+scaflod_solution_df = results_array_to_df(scaflod_solution, mg_model.state_index)
+scaflod_solution_df['time'] = scafold_times

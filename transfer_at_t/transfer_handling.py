@@ -16,6 +16,21 @@ class TranfersAtTsScafold:
 
     def __init__(self, transfer_info_dict):
         self.master_event_queue = TransferEventQueue(transfer_info_dict)
+        self._events = self.master_event_queue._events
+
+    def change_transfer_event_proportion(self, event_name, proportion):
+        event = self._events[event_name]
+        event.proportion = proportion
+
+    def change_transfer_event_amount(self, event_name, amount):
+        event = self._events[event_name]
+        event.amount = amount
+
+    def events_at_same_time(self):
+        return self.master_event_queue.events_at_same_time
+
+    def event_names(self):
+        return self.master_event_queue._events.keys()
 
     def run_simulation(self, func, y0,  end_time, start_time=0, simulation_step=1):
         if not all(time % simulation_step == 0
@@ -28,9 +43,11 @@ class TranfersAtTsScafold:
         current_time = start_time
         solution_at_t = y0
         next_time, event = event_queue.poptop()
+        time_ranges_of_sols = []
         while event_queue.not_empty():
             if current_time != next_time:
-                current_t_range = np.arange(current_time, next_time, simulation_step)
+                current_t_range = np.arange(current_time, next_time+simulation_step, simulation_step)
+                time_ranges_of_sols.append(current_t_range)
                 y_over_current_t_range = func(solution_at_t, current_t_range)
                 solution_at_t = y_over_current_t_range[-1, :]
                 y.append(y_over_current_t_range)
@@ -43,12 +60,13 @@ class TranfersAtTsScafold:
             next_time, event = event_queue.poptop()
 
         if current_time != end_time:
-            current_t_range = np.arange(current_time, end_time, simulation_step)
+            current_t_range = np.arange(current_time, end_time+simulation_step, simulation_step)
+            time_ranges_of_sols.append(current_t_range)
             y_over_current_t_range = func(solution_at_t, current_t_range)
             y.append(y_over_current_t_range)
-        y = np.concatenate(y, axis=0)
+        y = np.vstack(y)
         transfers_df = pd.DataFrame(tranfers_list)
-        return y, transfers_df
+        return y, transfers_df, time_ranges_of_sols
             
 
 
@@ -57,23 +75,28 @@ class TranfersAtTsScafold:
 class TransferEventQueue:
     def __init__(self, transfer_info_dict):
         unordered_que = {}
+        self.events_at_same_time = {}
+        self._events = {}
         for event_name, event_information in transfer_info_dict.items():
             event_information = copy.deepcopy(event_information) # We don't want to alter the original.
             times = set(event_information['times'])
             del event_information['times']
             event = Event(event_name, **event_information)
+            self._events[event.name] = event
             times_already_in_queue = set(unordered_que.keys()) & times
             if times_already_in_queue:
                 for time in times_already_in_queue:
                     if isinstance(unordered_que[time], Event):
-                        warn('Concuring events at time ' + str(time) + '.' +
-                             'Will process events occuring at same time in order of occurance in transfer_info_dict.')
+                        self.events_at_same_time[time] = [unordered_que[time].name, event.name]
                         unordered_que[time] = deque([unordered_que[time], event])
                     else:
+                        self.events_at_same_time[time].append(event_name)
                         unordered_que[time].append(event)
                 times -= times_already_in_queue
             unordered_que.update({time: event for time in times})
         self.queue = OrderedDict(sorted(unordered_que.items()))
+        if self.events_at_same_time:
+            warn('Concuring events in event queue. To view use method "events_at_same_time".')
 
     def poptop(self):
         if self.queue: # OrderedDicts if not empty are seen as True in bool statements.
@@ -123,23 +146,16 @@ class Event:
     def __init__(self, name, proportion=None, amount=None,
                  from_index=None, to_index=None):
         self.name = name
+        self._proportion = None
+        self._amount = None
         if proportion is None and amount is None:
             raise AssertionError('Proportion or amount argument must be give.')
         if proportion is not None:
             if amount is not None:
                 raise AssertionError('Either proportion or amount argument must be give not both')
-            if not isinstance(proportion,Number):
-                raise TypeError('Value for proportion must be a numeric type.')
-            if proportion <= 0:
-                raise ValueError('Value of ' + str(proportion) + ' entered for proportion must be greater than 0.')
-            if proportion > 1:
-                raise ValueError('Value of ' + str(proportion) +
-                                 ' entered for proportion must be less than or equal to 1.')
+            self.proportion = proportion
         if amount is not None:
-            if not isinstance(amount,Number):
-                raise TypeError('Value for amount must be a numeric type.')
-            if amount <= 0:
-                raise ValueError('Value of ' + str(amount) + ' entered for amount must be greater than 0.')
+            self.amount = amount
         if from_index is None and to_index is None:
             raise AssertionError('A container of ints must be given for from_index or to_index or both.')
         if from_index is not None:
@@ -157,14 +173,46 @@ class Event:
         if to_index is not None and proportion is not None and from_index is None:
             raise AssertionError('A proportion must be taken from somewhere if going to somewhere.'+
                                  'I.E. if a value is given for to_index and proportion a value must be given for from_index.')
-        self.amount = amount
-        self.proportion = proportion
         self.from_index = from_index
         self.to_index = to_index
 
+    @property
+    def proportion(self):
+        return self._proportion
+
+    @proportion.setter
+    def proportion(self, proportion):
+        if not isinstance(proportion, Number):
+            raise TypeError('Value for proportion must be a numeric type.')
+        if proportion < 0:
+            raise ValueError('Value of ' + str(proportion) + ' entered for proportion must be equal to or greater than 0.')
+        if proportion > 1:
+            raise ValueError('Value of ' + str(proportion) +
+                             ' entered for proportion must be less than or equal to 1.')
+        if self.amount is not None:
+            warn(self.name + ' was set to transfer an amount, it will now be set to transfer a proportion of those available.')
+            self._amount = None
+        self._proportion = proportion
+
+    @property
+    def amount(self):
+        return self._amount
+
+    @amount.setter
+    def amount(self, amount):
+        if not isinstance(amount, Number):
+            raise TypeError('Value for amount must be a numeric type.')
+        if amount < 0:
+            raise ValueError('Value of ' + str(amount) + ' entered for amount must be equal to or greater than 0.')
+        if self.proportion is not None:
+            warn(self.name + ' was set to transfer a proportion of those available, it will now be set to transfer an amount.')
+            self._proportion = None
+        self._amount = amount
 
     def process(self, solution_at_t, time, return_total_effected=True):
         if self.amount is not None:
+            if self.amount == 0:
+                pass
             transfers = np.repeat(self.amount, self.number_of_elements)
             if self.from_index is not None:
                 less_than_array = solution_at_t < transfers
@@ -174,6 +222,8 @@ class Event:
                          ' Removed total population of effected state or states instead.')
                     transfers[less_than_array] = solution_at_t[self.from_index[less_than_array]]
         if self.proportion is not None:
+            if self.proportion == 0:
+                pass
             transfers = solution_at_t[self.from_index] * self.proportion
         if self.to_index is not None:
             solution_at_t[self.to_index] += transfers
