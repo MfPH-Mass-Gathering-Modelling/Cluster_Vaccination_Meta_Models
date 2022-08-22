@@ -14,6 +14,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import copy
+import pandas as pd
 
 
 # %%
@@ -176,42 +177,42 @@ transfers_scafold = TranfersAtTsScafold(transfer_info_dict)
 
 #%%
 # Runninng mg_model
-solution, transfers_df = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
-
-#%%
-# Checking mg_model is working as it should.
-
-
-sol_df = results_array_to_df(solution, mg_model.state_index)
-
-
-#%% Conversion of dataframe for use in seaborn plotting package
-
-sol_pivoted = results_df_pivoted(sol_df)
+# solution, transfers_df = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
+#
+# #%%
+# # Checking mg_model is working as it should.
+#
+#
+# sol_df = results_array_to_df(solution, mg_model.state_index)
+#
+#
+# #%% Conversion of dataframe for use in seaborn plotting package
+#
+# sol_pivoted = results_df_pivoted(sol_df)
 
 
 
 #%%
 #Plotting graph of states accross vaccine groups
-graph_states_accross_groups = sns.FacetGrid(sol_pivoted, col='cluster', row='state', sharey=False)
-graph_states_accross_groups.map(sns.lineplot, 'time', 'population')
-graph_states_accross_groups.add_legend()
-plt.show()
+# graph_states_accross_groups = sns.FacetGrid(sol_pivoted, col='cluster', row='state', sharey=False)
+# graph_states_accross_groups.map(sns.lineplot, 'time', 'population')
+# graph_states_accross_groups.add_legend()
+# plt.show()
 
 
 #%%
 # Lets check that susceptible and early stage infections for tested cluster seen in the later part of the simulation
 # are those who have lost natural immunity. This can be done by setting wanning of immunity to 0.
-params_0_alpha = copy.deepcopy(test_params)
-params_0_alpha['alpha'] = 0
-mg_model.non_piecewise_params = params_0_alpha
-solution_0_alpha, transfers_df = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
-sol_0_alpha_df = results_array_to_df(solution_0_alpha, mg_model.state_index)
-sol_0_alpha_pivoted = results_df_pivoted(sol_0_alpha_df)
-graph_states_accross_groups = sns.FacetGrid(sol_0_alpha_pivoted, col='cluster', row='state', sharey=False)
-graph_states_accross_groups.map(sns.lineplot, 'time', 'population')
-graph_states_accross_groups.add_legend()
-plt.show()
+# params_0_alpha = copy.deepcopy(test_params)
+# params_0_alpha['alpha'] = 0
+# mg_model.non_piecewise_params = params_0_alpha
+# solution_0_alpha, transfers_df = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
+# sol_0_alpha_df = results_array_to_df(solution_0_alpha, mg_model.state_index)
+# sol_0_alpha_pivoted = results_df_pivoted(sol_0_alpha_df)
+# graph_states_accross_groups = sns.FacetGrid(sol_0_alpha_pivoted, col='cluster', row='state', sharey=False)
+# graph_states_accross_groups.map(sns.lineplot, 'time', 'population')
+# graph_states_accross_groups.add_legend()
+# plt.show()
 
 
 # Great now one in the test clusters who are susceptible or in an early stage of infection.
@@ -225,13 +226,22 @@ for event in transfers_scafold.event_names():
     transfers_scafold.change_transfer_event_proportion(event, proportion=0)
 
 mg_model.non_piecewise_params = test_params
-scaflod_solution, transfers_df, time_ranges_of_sols = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
-scafold_times = np.hstack(time_ranges_of_sols)
+scafold_solution, transfers_df, scafold_info_dict = transfers_scafold.run_simulation(mg_model.integrate,
+                                                                                     y0,
+                                                                                     end_time,
+                                                                                     full_output=True)
 
 time = np.arange(0,end_time+1,1)
-intergrate_solution = mg_model.integrate(y0,time)
+intergrate_solution, intergrate_info_dict = mg_model.integrate(y0,time, full_output=True)
 
 intergrate_solution_df = results_array_to_df(intergrate_solution, mg_model.state_index)
 intergrate_solution_df['time'] = time
-scaflod_solution_df = results_array_to_df(scaflod_solution, mg_model.state_index)
-scaflod_solution_df['time'] = scafold_times
+scafold_solution_df = results_array_to_df(scafold_solution, mg_model.state_index)
+scafold_solution_df['time'] = time
+
+# compare step sizes
+intergrate_info_df_describe = pd.Series(intergrate_info_dict['hu'])
+intergrate_info_df_describe.describe()
+
+scafold_info_df_describe = pd.Series(scafold_info_dict['hu'])
+scafold_info_df_describe.describe()

@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 from warnings import warn
 import copy
+import inspect
 
 class TranfersAtTsScafold:
 
@@ -32,7 +33,7 @@ class TranfersAtTsScafold:
     def event_names(self):
         return self.master_event_queue._events.keys()
 
-    def run_simulation(self, func, y0,  end_time, start_time=0, simulation_step=1):
+    def run_simulation(self, func, y0,  end_time, start_time=0, simulation_step=1, full_output=False):
         if not all(time % simulation_step == 0
                    for time in self.master_event_queue.times):
             raise ValueError('All time points for events must be divisible by simulation_step, leaving no remainder.')
@@ -43,14 +44,30 @@ class TranfersAtTsScafold:
         current_time = start_time
         solution_at_t = y0
         next_time, event = event_queue.poptop()
-        time_ranges_of_sols = []
+        if full_output:
+            function_args_inspection = inspect.getfullargspec(func)
+            full_output_in_func_args = 'full_output' in function_args_inspection.args
+            if full_output_in_func_args:
+                info_dict = {}
+            else:
+                warn('Full output unavailable as full_output is not an argument in function given to "func".')
+
+        def func_with_full_output(func, solution_at_t, current_t_range, info_dict):
+            y_over_current_t_range, info_sub_dict = func(solution_at_t, current_t_range, full_output=True)
+            range_as_list = current_t_range.tolist()
+            time_points = (range_as_list[0], range_as_list[-1])
+            info_dict[time_points] = info_sub_dict
+            return y_over_current_t_range
+
         while event_queue.not_empty():
             if current_time != next_time:
                 current_t_range = np.arange(current_time, next_time+simulation_step, simulation_step)
-                time_ranges_of_sols.append(current_t_range)
-                y_over_current_t_range = func(solution_at_t, current_t_range)
+                if full_output and full_output_in_func_args:
+                    y_over_current_t_range = func_with_full_output(func, solution_at_t, current_t_range, info_dict)
+                else:
+                    y_over_current_t_range = func(solution_at_t, current_t_range)
                 solution_at_t = y_over_current_t_range[-1, :]
-                y.append(y_over_current_t_range)
+                y.append(y_over_current_t_range[:-1, :])
             transfered = event.process(solution_at_t, current_time)
             transfers_entry = {'time':current_time,
                                'transfered':transfered,
@@ -61,12 +78,17 @@ class TranfersAtTsScafold:
 
         if current_time != end_time:
             current_t_range = np.arange(current_time, end_time+simulation_step, simulation_step)
-            time_ranges_of_sols.append(current_t_range)
-            y_over_current_t_range = func(solution_at_t, current_t_range)
+            if full_output and full_output_in_func_args:
+                y_over_current_t_range = func_with_full_output(func, solution_at_t, current_t_range, info_dict)
+            else:
+                y_over_current_t_range = func(solution_at_t, current_t_range)
             y.append(y_over_current_t_range)
         y = np.vstack(y)
         transfers_df = pd.DataFrame(tranfers_list)
-        return y, transfers_df, time_ranges_of_sols
+        if full_output and full_output_in_func_args:
+            return y, transfers_df, info_dict
+        else:
+            return y, transfers_df
             
 
 
