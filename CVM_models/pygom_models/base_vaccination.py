@@ -82,7 +82,7 @@ class BaseMultiClusterVacConstructor:
 
     def _attach_Params(self):
         self.all_parameters = set(self.universal_params + self.beta_list +
-                                  self.group_transition_params_dict.keys())
+                                  list(self.group_transition_params_dict.keys()))
         dictionary_list = [
             self.vaccine_specific_params_dict,
             self.cluster_specific_params_dict,
@@ -210,7 +210,7 @@ class BaseMultiClusterVacConstructor:
         for cluster_i in cluster_list:
             for cluster_j in cluster_list:
                 if cluster_i != cluster_j:
-                    self.append_semetric_transmission(self, cluster_i, cluster_j)
+                    self.append_semetric_transmission(cluster_i, cluster_j)
                 elif include_intra:
                     self.append_intra_transmission(cluster_i)
 

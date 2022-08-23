@@ -43,12 +43,12 @@ mg_model = MassGatheringModel(group_info)
 #%%
 # If available attach Jacobian. Note this has to avaluated for every different meta-population structure.
 # See CVM_models/pure_python_models/deriving_MG_model_jacobian.py
-# cvm_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/'+
-#            'Compartment based models/Cluster_Vaccination_Meta_Models/CVM_models/pure_python_models/')
-#
-# json_file = cvm_dir+"MG_model_jacobian.json"
-#
-# mg_model.load_dok_jacobian(json_file)
+pure_py_mods_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/'+
+                    'Compartment based models/Cluster_Vaccination_Meta_Models/CVM_models/pure_python_models/')
+
+json_file = pure_py_mods_dir+"testing_3_dose_model_jacobian.json"
+
+mg_model.load_dok_jacobian(json_file)
 
 # %%
 # Test parameter values
@@ -189,20 +189,20 @@ transfers_scafold = TranfersAtTsScafold(transfer_info_dict)
 # #%% Conversion of dataframe for use in seaborn plotting package
 #
 # sol_pivoted = results_df_pivoted(sol_df)
-
-
-
-#%%
-#Plotting graph of states accross vaccine groups
+#
+#
+#
+# #%%
+# #Plotting graph of states accross vaccine groups
 # graph_states_accross_groups = sns.FacetGrid(sol_pivoted, col='cluster', row='state', sharey=False)
 # graph_states_accross_groups.map(sns.lineplot, 'time', 'population')
 # graph_states_accross_groups.add_legend()
 # plt.show()
-
-
-#%%
-# Lets check that susceptible and early stage infections for tested cluster seen in the later part of the simulation
-# are those who have lost natural immunity. This can be done by setting wanning of immunity to 0.
+#
+#
+# #%%
+# # Lets check that susceptible and early stage infections for tested cluster seen in the later part of the simulation
+# # are those who have lost natural immunity. This can be done by setting wanning of immunity to 0.
 # params_0_alpha = copy.deepcopy(test_params)
 # params_0_alpha['alpha'] = 0
 # mg_model.non_piecewise_params = params_0_alpha
@@ -240,8 +240,42 @@ scafold_solution_df = results_array_to_df(scafold_solution, mg_model.state_index
 scafold_solution_df['time'] = time
 
 # compare step sizes
-intergrate_info_df_describe = pd.Series(intergrate_info_dict['hu'])
-intergrate_info_df_describe.describe()
+intergrate_info_step_size = pd.Series(intergrate_info_dict['hu'])
+intergrate_step_size_desciribe = intergrate_info_step_size.describe()
 
-scafold_info_df_describe = pd.Series(scafold_info_dict['hu'])
-scafold_info_df_describe.describe()
+
+scafold_step_sizes = []
+for scafold_info_sub_dict in scafold_info_dict.values():
+    scafold_step_sizes.append(scafold_info_sub_dict['hu'])
+scafold_step_sizes = np.concatenate(scafold_step_sizes,axis=0)
+
+
+scafold_step_sizes = pd.Series(scafold_step_sizes)
+scafold_step_sizes_describe = scafold_step_sizes.describe()
+
+intergrate_step_size_desciribe
+scafold_step_sizes_describe
+# Step sizes seem to be much smaller for scafold method. I beleive this means that the safold method might be more precise.
+
+#%% Lets check if the intergrator run on its own with same time chunks produces the same results as the scafold.
+time_chunks = list(scafold_info_dict.keys())
+simulation_step = 1
+intergrate_chunk_solutions = []
+info_dict = {}
+solution_at_t = y0
+for time_chunk in time_chunks:
+    start_time, end_time = time_chunk
+    current_t_range = np.arange(start_time, end_time+simulation_step, simulation_step)
+    y_over_current_t_range, info_sub_dict = mg_model.integrate(solution_at_t, current_t_range, full_output=True)
+    range_as_list = current_t_range.tolist()
+    time_points = (range_as_list[0], range_as_list[-1])
+    info_dict[time_points] = info_sub_dict
+    solution_at_t = y_over_current_t_range[-1, :]
+    if time_chunk != time_chunks[-1]:
+        intergrate_chunk_solutions.append(y_over_current_t_range[:-1, :])
+    else:
+        intergrate_chunk_solutions.append(y_over_current_t_range)
+
+intergrate_chunk_solutions = np.vstack(intergrate_chunk_solutions)
+
+

@@ -47,7 +47,7 @@ mg_model = MassGatheringModel(starting_population, group_info)
 cvm_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/'+
            'Compartment based models/Cluster_Vaccination_Meta_Models/CVM_models/pure_python_models/')
 
-json_file = cvm_dir+"MG_model_jacobian.json"
+json_file = cvm_dir+"1_cluster_3_dose_model_jacobian.json"
 mg_model.load_dok_jacobian(json_file)
 
 # %%

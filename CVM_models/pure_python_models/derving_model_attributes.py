@@ -40,7 +40,7 @@ class AttributeGetter:
                 new_dict_of_keys.items()}  # json keys cannot be tuples for this so convert to string
 
     def save_odes(self):
-        odes = self.pygom_model.get_odes_eqn()
+        odes = self.pygom_model.get_ode_eqn()
         odes_dok = self._gen_mod_dok_matrix(odes)
         with open(self.save_directory + self.name_for_model +"_odes.json", "w") as ode_outfile:
             json.dump(odes_dok, ode_outfile)
@@ -64,7 +64,11 @@ class AttributeGetter:
             json.dump(diff_jacobian_dok, diff_jac_outfile)
 
     
-        
+    def save_all_attributes(self):
+        self.save_odes()
+        self.save_jacobian()
+        self.save_gradient()
+        self.save_diff_jacobian()
     
         
         
