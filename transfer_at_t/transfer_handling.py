@@ -19,13 +19,39 @@ class TranfersAtTsScafold:
         self.master_event_queue = TransferEventQueue(transfer_info_dict)
         self._events = self.master_event_queue._events
 
-    def change_transfer_event_proportion(self, event_name, proportion):
-        event = self._events[event_name]
-        event.proportion = proportion
+    def _event_names_checker(self, event_names):
+        if event_names == 'all':
+            event_names = self.get_event_names()
+        else:
+            if not pd.api.types.is_list_like(event_names):
+                event_names = [event_names]
+            if any(not isinstance(item, str) for item in event_names):
+                raise TypeError('All event_names entries must be a string.')
+            available_event_names = self.get_event_names()
+            if any(not item in available_event_names for item in event_names):
+                raise TypeError('All event_names entries must be a string.')
+        return event_names
 
-    def change_transfer_event_amount(self, event_name, amount):
-        event = self._events[event_name]
-        event.amount = amount
+    def change_transfer_event_proportion(self, event_names, proportion):
+        event_names = self._event_names_checker(event_names)
+        for event_name in event_names:
+            event = self._events[event_name]
+            event.proportion = proportion
+
+    def change_transfer_event_amount(self, event_names, amount):
+        event_names = self._event_names_checker(event_names)
+        for event_name in event_names:
+            event = self._events[event_name]
+            event.amount = amount
+
+    def make_events_nullevents(self, event_names):
+        event_names = self._event_names_checker(event_names)
+        for event_name in event_names:
+            event = self._events[event_name]
+            event.make_event_a_nullevent()
+
+    def get_event_names(self):
+        return list(self._events.keys())
 
     def events_at_same_time(self):
         return self.master_event_queue.events_at_same_time
@@ -34,7 +60,7 @@ class TranfersAtTsScafold:
         return self.master_event_queue._events.keys()
 
     def run_simulation(self, func, y0,  end_time, start_time=0, simulation_step=1, full_output=False,
-                       args_to_pass_to_func={}):
+                       **kwargs_to_pass_to_func):
         if not all(time % simulation_step == 0
                    for time in self.master_event_queue.times):
             raise ValueError('All time points for events must be divisible by simulation_step, leaving no remainder.')
@@ -53,8 +79,8 @@ class TranfersAtTsScafold:
             else:
                 warn('Full output unavailable as full_output is not an argument in function given to "func".')
 
-        def func_with_full_output(func, solution_at_t, current_t_range, info_dict, args_to_pass_to_func):
-            y_over_current_t_range, info_sub_dict = func(solution_at_t, current_t_range, full_output=True, **args_to_pass_to_func)
+        def func_with_full_output(func, solution_at_t, current_t_range, info_dict, **kwargs_to_pass_to_func):
+            y_over_current_t_range, info_sub_dict = func(solution_at_t, current_t_range, full_output=True, **kwargs_to_pass_to_func)
             range_as_list = current_t_range.tolist()
             time_points = (range_as_list[0], range_as_list[-1])
             info_dict[time_points] = info_sub_dict
@@ -64,9 +90,9 @@ class TranfersAtTsScafold:
             if current_time != next_time:
                 current_t_range = np.arange(current_time, next_time+simulation_step, simulation_step)
                 if full_output and full_output_in_func_args:
-                    y_over_current_t_range = func_with_full_output(func, solution_at_t, current_t_range, info_dict)
+                    y_over_current_t_range = func_with_full_output(func, solution_at_t, current_t_range, info_dict, **kwargs_to_pass_to_func)
                 else:
-                    y_over_current_t_range = func(solution_at_t, current_t_range, **args_to_pass_to_func)
+                    y_over_current_t_range = func(solution_at_t, current_t_range, **kwargs_to_pass_to_func)
                 solution_at_t = y_over_current_t_range[-1, :]
                 y.append(y_over_current_t_range[:-1, :])
             transfered = event.process(solution_at_t, current_time)
@@ -80,9 +106,9 @@ class TranfersAtTsScafold:
         if current_time != end_time:
             current_t_range = np.arange(current_time, end_time+simulation_step, simulation_step)
             if full_output and full_output_in_func_args:
-                y_over_current_t_range = func_with_full_output(func, solution_at_t, current_t_range, info_dict, args_to_pass_to_func)
+                y_over_current_t_range = func_with_full_output(func, solution_at_t, current_t_range, info_dict, **kwargs_to_pass_to_func)
             else:
-                y_over_current_t_range = func(solution_at_t, current_t_range, **args_to_pass_to_func)
+                y_over_current_t_range = func(solution_at_t, current_t_range, **kwargs_to_pass_to_func)
             y.append(y_over_current_t_range)
         y = np.vstack(y)
         transfers_df = pd.DataFrame(tranfers_list)
@@ -164,13 +190,37 @@ class TransferEventQueue:
     def __repr__(self):
         return f"Queue({self.data.items()})"
 
+class NullEvent:
 
-class Event:
-    def __init__(self, name, proportion=None, amount=None,
-                 from_index=None, to_index=None):
+    def __init__(self, name):
         self.name = name
         self._proportion = None
         self._amount = None
+
+    @property
+    def proportion(self):
+        return self._proportion
+
+    @proportion.setter
+    def proportion(self, proportion):
+        raise AssertionError('NullEvents do nothing so proportion/probability or amount of being tranfered cannot be changed from 0.')
+
+    @property
+    def amount(self):
+        return self._amount
+
+    @amount.setter
+    def amount(self, amount):
+        raise AssertionError('NullEvents do nothing so amount or proportion/probability of being tranfered cannot be changed from 0.')
+
+    def process(self, solution_at_t, time, return_total_effected=True):
+        pass
+
+
+class Event(NullEvent):
+    def __init__(self, name, proportion=None, amount=None,
+                 from_index=None, to_index=None):
+        super().__init__(name)
         if proportion is None and amount is None:
             raise AssertionError('Proportion or amount argument must be give.')
         if proportion is not None:
@@ -193,9 +243,6 @@ class Event:
             self.number_of_elements = len(from_index)
         if from_index is not None and to_index is not None and len(from_index)!=len(to_index):
             raise AssertionError('If both from_index and to_index are given they must be of the same length.')
-        if to_index is not None and proportion is not None and from_index is None:
-            raise AssertionError('A proportion must be taken from somewhere if going to somewhere.'+
-                                 'I.E. if a value is given for to_index and proportion a value must be given for from_index.')
         self.from_index = from_index
         self.to_index = to_index
 
@@ -207,8 +254,9 @@ class Event:
     def proportion(self, proportion):
         if not isinstance(proportion, Number):
             raise TypeError('Value for proportion must be a numeric type.')
-        if proportion < 0:
-            raise ValueError('Value of ' + str(proportion) + ' entered for proportion must be equal to or greater than 0.')
+        if proportion <= 0:
+            raise ValueError('Value of ' + str(proportion) + ' entered for proportion must be greater than 0.' +
+                             'To turn event to a nullevent (an event that transfers nothing use method "make_event_a_nullevent".')
         if proportion > 1:
             raise ValueError('Value of ' + str(proportion) +
                              ' entered for proportion must be less than or equal to 1.')
@@ -225,35 +273,39 @@ class Event:
     def amount(self, amount):
         if not isinstance(amount, Number):
             raise TypeError('Value for amount must be a numeric type.')
-        if amount < 0:
-            raise ValueError('Value of ' + str(amount) + ' entered for amount must be equal to or greater than 0.')
+        if amount <= 0:
+            raise ValueError('Value of ' + str(amount) + ' entered for amount must be greater than 0.' +
+                             'To turn event to a nullevent (an event that transfers nothing use method "make_event_a_nullevent".')
         if self.proportion is not None:
             warn(self.name + ' was set to transfer a proportion of those available, it will now be set to transfer an amount.')
             self._proportion = None
         self._amount = amount
 
+    def make_event_a_nullevent(self):
+        self._amount = None
+        self._proportion = None
+
     def process(self, solution_at_t, time, return_total_effected=True):
-        if self.amount is not None:
-            if self.amount == 0:
-                pass
-            transfers = np.repeat(self.amount, self.number_of_elements)
+        if self.amount is None and self.proportion is None:
+            pass # do nothing
+        else:
+            if self.amount is not None:
+                transfers = np.repeat(self.amount, self.number_of_elements)
+                if self.from_index is not None:
+                    less_than_array = solution_at_t < transfers
+                    if any(less_than_array):
+                        warn('The total in one or more states was less than default amount being deducted'+
+                             ','+str(self.amount)+', at time ' + str(time) + '.'+
+                             ' Removed total population of effected state or states instead.')
+                        transfers[less_than_array] = solution_at_t[self.from_index[less_than_array]]
+            if self.proportion is not None:
+                transfers = solution_at_t[self.from_index] * self.proportion
+            if self.to_index is not None:
+                solution_at_t[self.to_index] += transfers
             if self.from_index is not None:
-                less_than_array = solution_at_t < transfers
-                if any(less_than_array):
-                    warn('The total in one or more states was less than default amount being deducted'+
-                         ','+str(self.amount)+', at time ' + str(time) + '.'+
-                         ' Removed total population of effected state or states instead.')
-                    transfers[less_than_array] = solution_at_t[self.from_index[less_than_array]]
-        if self.proportion is not None:
-            if self.proportion == 0:
-                pass
-            transfers = solution_at_t[self.from_index] * self.proportion
-        if self.to_index is not None:
-            solution_at_t[self.to_index] += transfers
-        if self.from_index is not None:
-            solution_at_t[self.from_index] -= transfers
-        if return_total_effected:
-            return transfers.sum()
+                solution_at_t[self.from_index] -= transfers
+            if return_total_effected:
+                return transfers.sum()
 
 
 

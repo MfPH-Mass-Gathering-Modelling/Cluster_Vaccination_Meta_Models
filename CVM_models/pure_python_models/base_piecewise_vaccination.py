@@ -350,7 +350,7 @@ class BaseScipyClusterVacModel:
                                      'has not been assigned a value or set up for piecewise estimation.')
 
 
-    def integrate(self, x0, t, full_output=False, called_in_fitting=False):
+    def integrate(self, x0, t, full_output=False, called_in_fitting=False, **kwargs_to_pass_to_odeint):
         '''
         A wrapper on top of :mod:`odeint <scipy.integrate.odeint>` using
         :class:`DeterministicOde <pygom.model.DeterministicOde>`.
@@ -374,18 +374,14 @@ class BaseScipyClusterVacModel:
         if self.dok_jacobian is None: # May or may not of defined the models Jacobian
             solution, output = scipy.integrate.odeint(self.ode,
                                                       x0, t, args=args,
-                                                      mu=None, ml=None,
-                                                      col_deriv=False,
-                                                      mxstep=10000,
-                                                      full_output=True)
+                                                      full_output=True,
+                                                      **kwargs_to_pass_to_odeint)
         else:
             solution, output = scipy.integrate.odeint(self.ode,
                                                       x0, t, args=args,
                                                       Dfun=self.jacobian,
-                                                      mu=None, ml=None,
-                                                      col_deriv=False,
-                                                      mxstep=10000,
-                                                      full_output=True)
+                                                      full_output=True,
+                                                      **kwargs_to_pass_to_odeint)
         if full_output == True:
             # have both
             return solution, output
