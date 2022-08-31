@@ -16,7 +16,7 @@ import inspect
 class TranfersAtTsScafold:
 
     def __init__(self, transfer_info_dict):
-        self.master_event_queue = TransferEventQueue(transfer_info_dict)
+        self.master_event_queue = EventQueue(transfer_info_dict)
         self._events = self.master_event_queue._events
 
     def _event_names_checker(self, event_names):
@@ -95,11 +95,15 @@ class TranfersAtTsScafold:
                     y_over_current_t_range = func(solution_at_t, current_t_range, **kwargs_to_pass_to_func)
                 solution_at_t = y_over_current_t_range[-1, :]
                 y.append(y_over_current_t_range[:-1, :])
-            transfered = event.process(solution_at_t, current_time)
-            transfers_entry = {'time':current_time,
-                               'transfered':transfered,
-                               'event':event.name}
-            tranfers_list.append(transfers_entry)
+            
+            if isinstance(event, TransferEvent):
+                transfered = event.process(solution_at_t, current_time)
+                transfers_entry = {'time':current_time,
+                                   'transfered':transfered,
+                                   'event':event.name}
+                tranfers_list.append(transfers_entry)
+            elif isinstance(event, ChangeParameterEvent):
+                event.process()                
             current_time = next_time
             next_time, event = event_queue.poptop()
 
@@ -116,12 +120,9 @@ class TranfersAtTsScafold:
             return y, transfers_df, info_dict
         else:
             return y, transfers_df
-            
 
 
-
-
-class TransferEventQueue:
+class EventQueue:
     def __init__(self, transfer_info_dict):
         unordered_que = {}
         self.events_at_same_time = {}
@@ -130,7 +131,7 @@ class TransferEventQueue:
             event_information = copy.deepcopy(event_information) # We don't want to alter the original.
             times = set(event_information['times'])
             del event_information['times']
-            event = Event(event_name, **event_information)
+            event = TransferEvent(event_name, **event_information)
             self._events[event.name] = event
             times_already_in_queue = set(unordered_que.keys()) & times
             if times_already_in_queue:
@@ -190,34 +191,16 @@ class TransferEventQueue:
     def __repr__(self):
         return f"Queue({self.data.items()})"
 
-class NullEvent:
+class Event:
 
     def __init__(self, name):
         self.name = name
-        self._proportion = None
-        self._amount = None
 
-    @property
-    def proportion(self):
-        return self._proportion
-
-    @proportion.setter
-    def proportion(self, proportion):
-        raise AssertionError('NullEvents do nothing so proportion/probability or amount of being tranfered cannot be changed from 0.')
-
-    @property
-    def amount(self):
-        return self._amount
-
-    @amount.setter
-    def amount(self, amount):
-        raise AssertionError('NullEvents do nothing so amount or proportion/probability of being tranfered cannot be changed from 0.')
-
-    def process(self, solution_at_t, time, return_total_effected=True):
+    def process(self):
         pass
 
 
-class Event(NullEvent):
+class TransferEvent(Event):
     def __init__(self, name, proportion=None, amount=None,
                  from_index=None, to_index=None):
         super().__init__(name)
@@ -287,7 +270,7 @@ class Event(NullEvent):
 
     def process(self, solution_at_t, time, return_total_effected=True):
         if self.amount is None and self.proportion is None:
-            pass # do nothing
+            super().process()
         else:
             if self.amount is not None:
                 transfers = np.repeat(self.amount, self.number_of_elements)
@@ -306,6 +289,74 @@ class Event(NullEvent):
                 solution_at_t[self.from_index] -= transfers
             if return_total_effected:
                 return transfers.sum()
+
+class ChangeParameterEvent(Event):
+    def __init__(self, name, parameter, parameters_getter_method, parameters_setter_method,
+                 factor=None, specific_value=None):
+        super().__init__(name)
+        if factor is None and specific_value is None:
+            raise AssertionError('factor or specific_value argument must be give.')
+        if factor is not None:
+            if specific_value is not None:
+                raise AssertionError('Either factor or specific_value argument must be give not both')
+            self.factor = factor
+        if specific_value is not None:
+            self.specific_value = specific_value
+        self.parameter = parameter
+        self.parameters_getter_method = parameters_getter_method
+        self.parameters_setter_method = parameters_setter_method
+
+    @property
+    def factor(self):
+        return self._factor
+
+    @factor.setter
+    def factor(self, factor):
+        if not isinstance(factor, Number):
+            raise TypeError('Value for factor must be a numeric type.')
+        if factor <= 0:
+            raise ValueError('Value of ' + str(factor) + ' entered for factor must be greater than 0.' +
+                             'To turn event to a nullevent (an event that transfers nothing use method "make_event_a_nullevent".')
+        if self.specific_value is not None:
+            warn(self.name + ' was set to change parameter "' +self.parameter +
+                 '"  to a specific_value, it will now be set to multiply "' +self.parameter +
+                 '" by a factor.')
+            self._specific_value = None
+        self._factor = factor
+
+    @property
+    def specific_value(self):
+        return self._specific_value
+
+    @specific_value.setter
+    def specific_value(self, specific_value):
+        if not isinstance(specific_value, Number):
+            raise TypeError('Value for specific_value must be a numeric type.')
+        if self.factor is not None:
+            warn(self.name + ' was set to to multiply "' +self.parameter +
+                 '" by a factor. It will now change "' +self.parameter +
+                 '" to a specific_value.')
+            self._factor = None
+        self._specific_value = specific_value
+
+    def make_event_a_nullevent(self):
+        self._specific_value = None
+        self._factor = None
+
+    def process(self):
+        if self.specific_value is None and self.factor is None:
+            super().process()
+        else:
+            parameters = self.parameters_getter_method
+            if isinstance(parameters, list):
+                parameters = {str(item[0]): item[1] for item in parameters}
+            if self.specific_value is not None:
+                value = self.specific_value
+            else:
+                value = parameters[self.parameter]*self.factor
+            parameters[self.parameter] = value
+            self.parameters_setter_method = parameters
+
 
 
 
