@@ -50,7 +50,7 @@ class BaseScipyClusterVacModel:
         self.dok_gradient = None
         self.dok_gradients_jacobian = None
         self._lossObj = None
-        self._non_piecewise_params = None
+        self._parameters = None
         self._starting_population = None
         self._initial_values = None
         self._initial_time = None
@@ -307,7 +307,7 @@ class BaseScipyClusterVacModel:
         return ans
 
     @property
-    def non_piecewise_params(self):
+    def parameters(self):
         """
         Returns
         -------
@@ -316,10 +316,10 @@ class BaseScipyClusterVacModel:
             (:mod:`sympy.core.symbol`, numeric)
 
         """
-        return self._non_piecewise_params
+        return self._parameters
 
-    @non_piecewise_params.setter
-    def non_piecewise_params(self, parameters):
+    @parameters.setter
+    def parameters(self, parameters):
         if not isinstance(parameters, dict):
             raise TypeError('Currently non non_piecewise_params must be entered as a dict.')
         # we assume that the key of the dictionary is a string and
@@ -339,10 +339,10 @@ class BaseScipyClusterVacModel:
             if not isinstance(value, Number):
                 raise TypeError(param_name + ' is not a number type.')
         # this must be sorted alphanumerically.
-        self._non_piecewise_params = {key: value for key, value in sorted(parameters.items())}
+        self._parameters = {key: value for key, value in sorted(parameters.items())}
 
     def check_all_params_represented(self):
-        check_list = (list(self.non_piecewise_params.keys()) +
+        check_list = (list(self.parameters.keys()) +
                       self.params_estimated_via_piecewise_method)
         for param in self.all_parameters:
             if param not in check_list:
@@ -370,7 +370,7 @@ class BaseScipyClusterVacModel:
         self.piecewise_est_param_values = {param: {} for param in self.params_estimated_via_piecewise_method}
         # INTEGRATE!!! (shout it out loud, in Dalek voice)
         # determine the number of output we want
-        args = tuple(self.non_piecewise_params.values())
+        args = tuple(self.parameters.values())
         if self.dok_jacobian is None: # May or may not of defined the models Jacobian
             solution, output = scipy.integrate.odeint(self.ode,
                                                       x0, t, args=args,

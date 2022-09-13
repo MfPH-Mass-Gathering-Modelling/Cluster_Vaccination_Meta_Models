@@ -144,8 +144,6 @@ class BaseMultiClusterVacConstructor:
             raise ValueError(string + ' is not one of the predefined model ' + list_strings + ': ' +
                              ','.join(check_list[:-1]) + ' and ' + check_list[:-1] +'.')
 
-
-
     # functions for appending to dictionary of lambdas and list of betas
     def append_transmission(self, cluster_i, cluster_j):
         """Append cluster_i cluster_j transmssion term to beta_list and self.lambda_dict.

@@ -118,7 +118,7 @@ test_params = {
 }
 
 
-mg_model.non_piecewise_params = test_params
+mg_model.parameters = test_params
 
 #%%
 # Setting up population
@@ -205,7 +205,7 @@ plt.show()
 # are those who have lost natural immunity. This can be done by setting wanning of immunity to 0.
 params_0_alpha = copy.deepcopy(test_params)
 params_0_alpha['alpha'] = 0
-mg_model.non_piecewise_params = params_0_alpha
+mg_model.parameters = params_0_alpha
 solution_0_alpha, transfers_df = transfers_scafold.run_simulation(mg_model.integrate, y0, end_time)
 sol_0_alpha_df = results_array_to_df(solution_0_alpha, mg_model.state_index)
 sol_0_alpha_pivoted = results_df_pivoted(sol_0_alpha_df)
@@ -224,7 +224,7 @@ plt.show()
 # Set all transfer events to 0 being transfered.
 transfers_scafold.make_events_nullevents('all')
 
-mg_model.non_piecewise_params = test_params
+mg_model.parameters = test_params
 scafold_solution, transfers_df, scafold_info_dict = transfers_scafold.run_simulation(mg_model.integrate,
                                                                                      y0,
                                                                                      end_time,
