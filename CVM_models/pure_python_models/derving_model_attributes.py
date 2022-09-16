@@ -22,13 +22,16 @@ class AttributeGetter:
                         for row in range(rows)
                         for col in range(cols)
                         if sym_matrix[row, col] != 0}
-        replacement = {state + '_' + cluster + '_' + vaccine_group: 'y[' + str(index) + ']'
-                       for cluster, vaccine_group_state_index in
-                       self.pygom_model_constructor.cluste_vaccine_group_state_index.items()
-                       for vaccine_group, state_index in vaccine_group_state_index.items()
-                       for state, index in state_index.items()}
+        state_index = {str(state): index
+                       for index, state in enumerate(self.pygom_model.state_list)}
+        states_by_length_descending = sorted(state_index.keys(),
+                                             key=len, reverse=True)
+        replacement = {state: 'y[' + str(state_index[state]) + ']'
+                       for state in states_by_length_descending}
+        params_by_length_descending = sorted(self.pygom_model._paramDict.keys(),
+                                             key=len, reverse=True)
         replacement.update({parameter: "parameters['" + parameter + "']"
-                            for parameter in self.pygom_model_constructor.all_parameters})
+                            for parameter in params_by_length_descending})
 
         new_dict_of_keys = {}
         for coords, value in dict_of_keys.items():

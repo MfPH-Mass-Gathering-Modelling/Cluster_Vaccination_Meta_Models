@@ -96,5 +96,5 @@ group_info = gen_clusters_vaccine_and_test_structures(clusters)
 dir_name = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/'+
             'Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models/'+
             'CVM_models/Model meta population structures/')
-with open(dir_name + "testing rolling booster vaccine model.json", "w") as outfile:
+with open(dir_name + "World cup MGE.json", "w") as outfile:
     json.dump(group_info, outfile)

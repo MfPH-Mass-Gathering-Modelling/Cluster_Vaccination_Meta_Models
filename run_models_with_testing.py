@@ -127,7 +127,7 @@ mg_model.parameters = test_params
 qatars_population = 2930524
 # From Qatars vaccination data enter populations
 full_dose = 2751485 # https://coronavirus.jhu.edu/region/qatar
-booster_dose = 1843632 # https://covid19.moph.gov.qa/EN/Pages/Vaccination-Program-Data.aspx
+booster_dose = 1870034 # https://covid19.moph.gov.qa/EN/Pages/Vaccination-Program-Data.aspx
 unvaccinated = qatars_population - full_dose
 
 y0 = np.zeros(mg_model.num_state)

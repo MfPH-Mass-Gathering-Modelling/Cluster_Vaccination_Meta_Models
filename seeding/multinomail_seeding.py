@@ -8,6 +8,7 @@ Description: Class for Multnomial random draw seeding of infections.
 from numbers import Number
 from numpy.random import multinomial
 from pandas import DataFrame
+import math
 
 class InfectionBranch:
     def __init__(self, branch_name, outflows):
@@ -48,17 +49,20 @@ class InfectionBranch:
 
 class MultnomialSeeder:
 
-    def __init__(self,branch_info):
+    def __init__(self, branch_info):
         if not isinstance(branch_info,dict):
             raise TypeError('branch_info should be a dictionary.')
         self.branches = {}
-        for branch_name, branch_info_sub_dict in branch_info.items():
+        for branch_name, outflows in branch_info.items():
             if not isinstance(branch_info, dict):
                 raise TypeError('branch_info should be a dictionary of dictionaries.')
-            self.branches[branch_name] = InfectionBranch(branch_name=branch_name,
-                                                         **branch_info_sub_dict)
+            self.branches[branch_name] = InfectionBranch(branch_name, outflows)
 
     def calculate_weighting(self, proportions, parameters):
+        proportions_total = sum(proportions.values())
+        if not math.isclose(1, proportions_total, abs_tol=0.000001):
+            raise ValueError('The sum of dictionary values in proportions should equal 1, it is equal to ' +
+                             str(proportions_total)+'.')
         for index, (branch_name, branch) in enumerate(self.branches.items()):
             branch_weighting = branch.calculate_weighting(proportions[branch_name],
                                                           parameters)
@@ -79,9 +83,12 @@ class MultnomialSeeder:
         if not(isinstance(size,int)) or size <= 0:
             raise TypeError('size must be an int >0.')
         weighting = self.calculate_weighting(proportions, parameters)
-        draw = multinomial(n=n,pvals=weighting.values(), size=size)
-        draws_dataframe = DataFrame(draw, columns=weighting.keys())
-        return draws_dataframe
+        draw = multinomial(n=n, pvals=weighting.values(), size=size)
+        if size>1:
+            draw = DataFrame(draw, columns=weighting.keys())
+        else:
+            draw = dict(zip(weighting.keys(),draw))
+        return draw
 
 
 

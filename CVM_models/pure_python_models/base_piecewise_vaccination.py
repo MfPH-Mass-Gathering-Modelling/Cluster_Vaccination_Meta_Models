@@ -324,12 +324,7 @@ class BaseScipyClusterVacModel:
             raise TypeError('Currently non non_piecewise_params must be entered as a dict.')
         # we assume that the key of the dictionary is a string and
         # the value can be a single value or a distribution
-        if len(parameters) > self.num_non_piece_wise_params:
-            raise Exception("Too many input parameters, should be of length "
-                            + str(self.num_non_piece_wise_params)+ '.')
-        if len(parameters) < self.num_non_piece_wise_params:
-            raise Exception("Too few input parameters, should be of length "
-                            + str(self.num_non_piece_wise_params)+ '.')
+
         for param_name, value in parameters.items():
             if param_name not in self.all_parameters:
                 raise ValueError(param_name + ' is not a name given to a parameter for this model.')
@@ -338,6 +333,12 @@ class BaseScipyClusterVacModel:
                                      'at the initialization of this model.')
             if not isinstance(value, Number):
                 raise TypeError(param_name + ' is not a number type.')
+        params_not_given = [param for param in self.all_parameters
+                            if param not in
+                            list(parameters.keys()) + self.params_estimated_via_piecewise_method]
+        if params_not_given:
+            raise Exception(', '.join(params_not_given) +
+                            " are/is missing from parameters for model (see self.all_parameters).")
         # this must be sorted alphanumerically.
         self._parameters = {key: value for key, value in sorted(parameters.items())}
 

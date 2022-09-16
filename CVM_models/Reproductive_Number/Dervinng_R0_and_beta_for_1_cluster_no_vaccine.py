@@ -16,7 +16,7 @@ mg_model_constuctor = MGModelConstructor(group_structure)
 mg_model = mg_model_constuctor.generate_model(variety='deterministic')
 odes = mg_model.get_ode_eqn()
 graph_dot = mg_model.get_transition_graph(file_name='single_pop_no_vaccine.dot')
-graph_dot.render(filename='single_pop_no_vaccine', format='pdf')
+graph_dot.render(filename='../../single_pop_no_vaccine', format='pdf')
 mg_model.state_list
 disease_states = ['E____',
                   'G_I____','G_A____',
@@ -60,7 +60,7 @@ mg_model_redefined = DeterministicOde(state=all_states,
                                       param=all_params,
                                       transition=new_transitions)
 graph_dot = mg_model_redefined.get_transition_graph(file_name='single_pop_no_vaccine.dot')
-graph_dot.render(filename='single_pop_no_vaccine', format='pdf')
+graph_dot.render(filename='../../single_pop_no_vaccine', format='pdf')
 #%%
 disease_states = ['E',
                   'G_I','G_A',
@@ -92,6 +92,7 @@ infecteds_jacobian = infecteds_matrix.jacobian(X=[E,
                                                   F_D, F_I, F_A,
                                                   H])
 
+
 # e.g. removing people becoming infected from the jacobian above.
 Sigma = infecteds_jacobian.subs(beta,0)
 Sigma
@@ -102,7 +103,7 @@ Sigma
 T_inf_births_subs = {eval(param):0
                      for param in all_params
                      if param not in ['beta', 'theta', 'kappa_D', 'N']}
-T_inf_births_subs[S] = 1 # normalise for S
+T_inf_births_subs[S]= N # Cancel out S and N by substituting S=1 and N=1
 T_inf_births = infecteds_jacobian.subs(T_inf_births_subs)
 T_inf_births
 
@@ -120,3 +121,13 @@ none_zero_eigen_values = [item for item in eigen_values.keys() if item !=0]
 sympy_R0 = none_zero_eigen_values[0]
 sympy_R0 = sympy.simplify(sympy_R0)
 sympy_R0 = sympy.simplify(sympy_R0) # I think this is correct will have to check.
+
+#%%
+# Dervining Beta
+
+R_0 = sympy.symbols('R_0')
+eq_R0 = sympy.Eq(sympy_R0, R_0)
+beta_eq = sympy.solve(eq_R0, beta)
+beta_eq = beta_eq[0]
+beta_eq = sympy.simplify(beta_eq) # I think this is correct will have to check.
+beta_eq = sympy.simplify(beta_eq) # I think this is correct will have to check.
