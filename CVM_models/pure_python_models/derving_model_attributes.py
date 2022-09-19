@@ -6,6 +6,7 @@ Description: Derving pure python model attributes using pygom.
     
 """
 import json
+from collections import OrderedDict
 
 class AttributeGetter:
     def __init__(self, pygom_model_constucter, metapopulation_structure, name_for_model, save_directory,
@@ -22,22 +23,39 @@ class AttributeGetter:
                         for row in range(rows)
                         for col in range(cols)
                         if sym_matrix[row, col] != 0}
-        state_index = {str(state): index
-                       for index, state in enumerate(self.pygom_model.state_list)}
+        state_index = {state + '_' + cluster + '_' + vaccine_group: 'y[' + str(index) + ']'
+                       for cluster, vaccine_group_state_index in
+                       self.pygom_model_constructor.cluste_vaccine_group_state_index.items()
+                       for vaccine_group, state_index in vaccine_group_state_index.items()
+                       for state, index in state_index.items()}
         states_by_length_descending = sorted(state_index.keys(),
                                              key=len, reverse=True)
         replacement = {state: 'y[' + str(state_index[state]) + ']'
                        for state in states_by_length_descending}
-        params_by_length_descending = sorted(self.pygom_model._paramDict.keys(),
+        param_index = {str(param): index
+                       for index, param in enumerate(self.pygom_model.param_list)}
+        params_by_length_descending = sorted(param_index.keys(),
                                              key=len, reverse=True)
-        replacement.update({parameter: "parameters['" + parameter + "']"
-                            for parameter in params_by_length_descending})
 
-        new_dict_of_keys = {}
+        replacement.update({param: "parameters['" + str(param_index[param]) + "']"
+                            for param in params_by_length_descending})
+        temp_dict_of_keys = {}
         for coords, value in dict_of_keys.items():
             for orignal, new in replacement.items():
                 value = value.replace(orignal, new)
+            temp_dict_of_keys[coords] = value
+
+        index_param = {value: key for key, value in param_index.items()}
+        index_param = OrderedDict(sorted(index_param.items(), reverse=True))
+        replacement = {"parameters['" + str(index) + "']": "parameters['" + param + "']"
+                       for index, param in index_param.items()}
+        new_dict_of_keys = {}
+        for coords, value in temp_dict_of_keys.items():
+            for orignal, new in replacement.items():
+                value = value.replace(orignal, new)
             new_dict_of_keys[coords] = value
+
+
 
         return {str(key): value for key, value in
                 new_dict_of_keys.items()}  # json keys cannot be tuples for this so convert to string

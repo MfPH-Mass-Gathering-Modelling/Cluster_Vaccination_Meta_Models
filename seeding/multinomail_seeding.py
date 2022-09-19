@@ -35,9 +35,9 @@ class InfectionBranch:
                             ' with keys being strings and values being numbers.')
         if not isinstance(parameters, dict):
             raise TypeError(parameters_error)
-        if any(not isinstance(value,Number) for value in  parameters_error.values()):
+        if any(not isinstance(value, Number) for value in parameters.values()):
             raise TypeError(parameters_error)
-        if any(not isinstance(key,str) for key in  parameters_error.keys()):
+        if any(not isinstance(key,str) for key in parameters.keys()):
             raise TypeError(parameters_error)
 
         return {state: proportion*(parameters[outflow]/1)
@@ -83,11 +83,13 @@ class MultnomialSeeder:
         if not(isinstance(size,int)) or size <= 0:
             raise TypeError('size must be an int >0.')
         weighting = self.calculate_weighting(proportions, parameters)
-        draw = multinomial(n=n, pvals=weighting.values(), size=size)
+        pvals = list(weighting.values())
+        states = list(weighting.keys())
+        draw = multinomial(n=n, pvals=pvals, size=size)
         if size>1:
-            draw = DataFrame(draw, columns=weighting.keys())
+            draw = DataFrame(draw, columns=states)
         else:
-            draw = dict(zip(weighting.keys(),draw))
+            draw = dict(zip(states ,draw[0]))
         return draw
 
 
