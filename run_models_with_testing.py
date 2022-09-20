@@ -21,7 +21,7 @@ import pandas as pd
 # import model
 from CVM_models.pure_python_models.mass_gathering_piecewise_vaccination import MassGatheringModel
 # import transfer class
-from transfer_at_t.transfer_handling import TranfersAtTsScafold
+from event_handling.event_que import EventQueue
 from cleaning_up_results.results_to_dfs import results_array_to_df, results_df_pivoted
 #%%
 # get model meta population structure
@@ -173,7 +173,7 @@ transfer_info_dict['RTPCR test'] = {'proportion': rtpcr_sensitivity,
                                     'to_index': rtpcr_to_index,
                                     'times': rtpcr_times}
 
-transfers_scafold = TranfersAtTsScafold(transfer_info_dict)
+transfers_scafold = EventQueue(transfer_info_dict)
 
 #%%
 # Runninng mg_model

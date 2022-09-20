@@ -5,6 +5,7 @@ Creation:
 Description: Classes for handling transfer of people between states to another at set timepoints.
     
 """
+from event_handling.events import *
 from collections import OrderedDict, deque
 from numbers import Number
 import numpy as np
@@ -13,10 +14,10 @@ from warnings import warn
 import copy
 import inspect
 
-class TranfersAtTsScafold:
+class EventQueue:
 
-    def __init__(self, transfer_info_dict):
-        self.master_event_queue = EventQueue(transfer_info_dict)
+    def __init__(self, event_info_dict):
+        self.master_event_queue = _EventQueue(event_info_dict)
         self._events = self.master_event_queue._events
 
     def _event_names_checker(self, event_names):
@@ -32,13 +33,13 @@ class TranfersAtTsScafold:
                 raise TypeError('All event_names entries must be a string.')
         return event_names
 
-    def change_transfer_event_proportion(self, event_names, proportion):
+    def change_event_factor(self, event_names, factor):
         event_names = self._event_names_checker(event_names)
         for event_name in event_names:
             event = self._events[event_name]
-            event.proportion = proportion
+            event.proportion = factor
 
-    def change_transfer_event_amount(self, event_names, amount):
+    def change_event_value(self, event_names, amount):
         event_names = self._event_names_checker(event_names)
         for event_name in event_names:
             event = self._events[event_name]
@@ -59,8 +60,11 @@ class TranfersAtTsScafold:
     def event_names(self):
         return self.master_event_queue._events.keys()
 
-    def run_simulation(self, func, y0,  end_time, start_time=0, simulation_step=1, full_output=False,
+    def run_simulation(self, model_object, run_attribute, y0, end_time, args,  arg_attribute,
+                       start_time=0, simulation_step=1,
+                       full_output=False,
                        **kwargs_to_pass_to_func):
+        args = copy.deepcopy(args) # we dont want to change the original (we want to work from a copy).
         if not all(time % simulation_step == 0
                    for time in self.master_event_queue.times):
             raise ValueError('All time points for events must be divisible by simulation_step, leaving no remainder.')
@@ -70,9 +74,10 @@ class TranfersAtTsScafold:
         y = []
         current_time = start_time
         solution_at_t = y0
-        next_time, event = event_queue.poptop()
+        setattr(model_object, arg_attribute, args)
         if full_output:
-            function_args_inspection = inspect.getfullargspec(func)
+            run_method = getattr(model_object, run_attribute)
+            function_args_inspection = inspect.getfullargspec(run_method)
             full_output_in_func_args = 'full_output' in function_args_inspection.args
             if full_output_in_func_args:
                 info_dict = {}
@@ -87,15 +92,19 @@ class TranfersAtTsScafold:
             return y_over_current_t_range
 
         while event_queue.not_empty():
+            next_time, event = event_queue.poptop()
             if current_time != next_time:
+                # run until current time is next time
                 current_t_range = np.arange(current_time, next_time+simulation_step, simulation_step)
+                run_method = getattr(model_object, run_attribute)
                 if full_output and full_output_in_func_args:
-                    y_over_current_t_range = func_with_full_output(func, solution_at_t, current_t_range, info_dict, **kwargs_to_pass_to_func)
+                    y_over_current_t_range = func_with_full_output(run_method, solution_at_t, current_t_range, info_dict, **kwargs_to_pass_to_func)
                 else:
-                    y_over_current_t_range = func(solution_at_t, current_t_range, **kwargs_to_pass_to_func)
+                    y_over_current_t_range = run_method(solution_at_t, current_t_range, **kwargs_to_pass_to_func)
                 solution_at_t = y_over_current_t_range[-1, :]
                 y.append(y_over_current_t_range[:-1, :])
-            
+                current_time = next_time
+            # then do event
             if isinstance(event, TransferEvent):
                 transfered = event.process(solution_at_t, current_time)
                 transfers_entry = {'time':current_time,
@@ -103,16 +112,16 @@ class TranfersAtTsScafold:
                                    'event':event.name}
                 tranfers_list.append(transfers_entry)
             elif isinstance(event, ChangeParametersEvent):
-                event.process()                
-            current_time = next_time
-            next_time, event = event_queue.poptop()
+                event.process(model_object, args,  arg_attribute)
+
 
         if current_time != end_time:
             current_t_range = np.arange(current_time, end_time+simulation_step, simulation_step)
+            run_method = getattr(model_object, run_attribute)
             if full_output and full_output_in_func_args:
-                y_over_current_t_range = func_with_full_output(func, solution_at_t, current_t_range, info_dict, **kwargs_to_pass_to_func)
+                y_over_current_t_range = func_with_full_output(run_method, solution_at_t, current_t_range, info_dict, **kwargs_to_pass_to_func)
             else:
-                y_over_current_t_range = func(solution_at_t, current_t_range, **kwargs_to_pass_to_func)
+                y_over_current_t_range = run_method(solution_at_t, current_t_range, **kwargs_to_pass_to_func)
             y.append(y_over_current_t_range)
         y = np.vstack(y)
         transfers_df = pd.DataFrame(tranfers_list)
@@ -122,7 +131,7 @@ class TranfersAtTsScafold:
             return y, transfers_df
 
 
-class EventQueue:
+class _EventQueue:
     def __init__(self, transfer_info_dict):
         unordered_que = {}
         self.events_at_same_time = {}
@@ -146,7 +155,7 @@ class EventQueue:
             times_already_in_queue = set(unordered_que.keys()) & times
             if times_already_in_queue:
                 for time in times_already_in_queue:
-                    if isinstance(unordered_que[time], Event):
+                    if isinstance(unordered_que[time], BaseEvent):
                         self.events_at_same_time[time] = [unordered_que[time].name, event.name]
                         unordered_que[time] = deque([unordered_que[time], event])
                     else:
@@ -195,147 +204,8 @@ class EventQueue:
     def times(self):
         return self.queue.keys()
 
-    def __time_points__(self):
+    def __len__(self):
         return len(self.queue)
 
     def __repr__(self):
         return f"Queue({self.data.items()})"
-
-class Event:
-
-    def __init__(self, name):
-        self.name = name
-
-    def process(self):
-        pass
-
-
-class TransferEvent(Event):
-    def __init__(self, name, proportion=None, amount=None,
-                 from_index=None, to_index=None):
-        self._amount = None
-        self._proportion = None
-        super().__init__(name)
-        if proportion is None and amount is None:
-            raise AssertionError('Proportion or amount argument must be give.')
-        if proportion is not None:
-            if amount is not None:
-                raise AssertionError('Either proportion or amount argument must be give not both')
-            self.proportion = proportion
-        if amount is not None:
-            self.amount = amount
-        if from_index is None and to_index is None:
-            raise AssertionError('A container of ints must be given for from_index or to_index or both.')
-        if from_index is not None:
-            if not all(isinstance(index, int) for index in from_index):
-                raise TypeError('All values in from_index must be ints.')
-            if from_index == to_index:
-                raise AssertionError('from_index and to_index must not be equivelant.')
-            self.number_of_elements = len(from_index)
-        if to_index is not None:
-            if not all(isinstance(index, int) for index in from_index):
-                raise TypeError('All values in to_index must be ints.')
-            self.number_of_elements = len(from_index)
-        if from_index is not None and to_index is not None and len(from_index)!=len(to_index):
-            raise AssertionError('If both from_index and to_index are given they must be of the same length.')
-        self.from_index = from_index
-        self.to_index = to_index
-
-    @property
-    def proportion(self):
-        return self._proportion
-
-    @proportion.setter
-    def proportion(self, proportion):
-        if not isinstance(proportion, Number):
-            raise TypeError('Value for proportion must be a numeric type.')
-        if proportion <= 0:
-            raise ValueError('Value of ' + str(proportion) + ' entered for proportion must be greater than 0.' +
-                             'To turn event to a nullevent (an event that transfers nothing use method "make_event_a_nullevent".')
-        if proportion > 1:
-            raise ValueError('Value of ' + str(proportion) +
-                             ' entered for proportion must be less than or equal to 1.')
-        if self.amount is not None:
-            warn(self.name + ' was set to transfer an amount, it will now be set to transfer a proportion of those available.')
-            self._amount = None
-        self._proportion = proportion
-
-    @property
-    def amount(self):
-        return self._amount
-
-    @amount.setter
-    def amount(self, amount):
-        if not isinstance(amount, Number):
-            raise TypeError('Value for amount must be a numeric type.')
-        if amount <= 0:
-            raise ValueError('Value of ' + str(amount) + ' entered for amount must be greater than 0.' +
-                             'To turn event to a nullevent (an event that transfers nothing use method "make_event_a_nullevent".')
-        if self.proportion is not None:
-            warn(self.name + ' was set to transfer a proportion of those available, it will now be set to transfer an amount.')
-            self._proportion = None
-        self._amount = amount
-
-    def make_event_a_nullevent(self):
-        self._amount = None
-        self._proportion = None
-
-    def process(self, solution_at_t, time, return_total_effected=True):
-        if self.amount is None and self.proportion is None:
-            super().process()
-        else:
-            if self.amount is not None:
-                transfers = np.repeat(self.amount, self.number_of_elements)
-                if self.from_index is not None:
-                    less_than_array = solution_at_t < transfers
-                    if any(less_than_array):
-                        warn('The total in one or more states was less than default amount being deducted'+
-                             ','+str(self.amount)+', at time ' + str(time) + '.'+
-                             ' Removed total population of effected state or states instead.')
-                        transfers[less_than_array] = solution_at_t[self.from_index[less_than_array]]
-            if self.proportion is not None:
-                transfers = solution_at_t[self.from_index] * self.proportion
-            if self.to_index is not None:
-                solution_at_t[self.to_index] += transfers
-            if self.from_index is not None:
-                solution_at_t[self.from_index] -= transfers
-            if return_total_effected:
-                return transfers.sum()
-
-class ChangeParametersEvent(Event):
-    def __init__(self, name, parameters, parameters_getter_method, parameters_setter_method, value):
-        super().__init__(name)
-        self.value = value
-        self.parameters = parameters
-        self.parameters_getter_method = parameters_getter_method
-        self.parameters_setter_method = parameters_setter_method
-
-    @property
-    def value(self):
-        return self._value
-
-    @value.setter
-    def value(self, specific_value):
-        if not isinstance(specific_value, Number):
-            raise TypeError('Value must be a numeric type.')
-        self._value = specific_value
-
-    def make_event_a_nullevent(self):
-        self._value = None
-
-    def process(self):
-        if self.value is None:
-            super().process()
-        else:
-            parameters_being_used = self.parameters_getter_method
-            if isinstance(parameters_being_used, list):
-                parameters_being_used = {str(item[0]): item[1] for item in parameters_being_used}
-            for parameter in self.parameters:
-                parameters_being_used[parameter] = self.value
-            self.parameters_setter_method = parameters_being_used
-
-
-
-
-
-

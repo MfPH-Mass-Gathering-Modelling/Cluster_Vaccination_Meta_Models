@@ -98,6 +98,6 @@ class MassGatheringModel(BaseScipyClusterVacModel):
                 y_deltas[states_index['R']] += hospital_recovery + asymptomatic_recovery + symptomatic_recovery + detected_recovery - waned_natural_immunity
                 y_deltas[-2] += prog_detected_at_hospital - hospital_recovery
                 y_deltas[-1] += prog_detected
-                    # self.ode_calls_dict[key] = y_deltas
+                # self.ode_calls_dict[key] = y_deltas
 
         return y_deltas
