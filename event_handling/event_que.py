@@ -33,17 +33,23 @@ class EventQueue:
                 raise TypeError('All event_names entries must be a string.')
         return event_names
 
+    def change_event_proportion(self, event_names, proportion):
+        event_names = self._event_names_checker(event_names)
+        for event_name in event_names:
+            event = self._events[event_name]
+            event.proportion = proportion
+
     def change_event_factor(self, event_names, factor):
         event_names = self._event_names_checker(event_names)
         for event_name in event_names:
             event = self._events[event_name]
-            event.proportion = factor
+            event.factor = factor
 
-    def change_event_value(self, event_names, amount):
+    def change_event_value(self, event_names, value):
         event_names = self._event_names_checker(event_names)
         for event_name in event_names:
             event = self._events[event_name]
-            event.amount = amount
+            event.value = value
 
     def make_events_nullevents(self, event_names):
         event_names = self._event_names_checker(event_names)
@@ -60,21 +66,21 @@ class EventQueue:
     def event_names(self):
         return self.master_event_queue._events.keys()
 
-    def run_simulation(self, model_object, run_attribute, y0, end_time, args,  arg_attribute,
+    def run_simulation(self, model_object, run_attribute, y0, end_time, parameters_attribute, parameters,
                        start_time=0, simulation_step=1,
-                       full_output=False,
+                       full_output=False, return_param_changes=False,
                        **kwargs_to_pass_to_func):
-        args = copy.deepcopy(args) # we dont want to change the original (we want to work from a copy).
         if not all(time % simulation_step == 0
                    for time in self.master_event_queue.times):
             raise ValueError('All time points for events must be divisible by simulation_step, leaving no remainder.')
+        setattr(model_object, parameters_attribute, parameters)
+        param_changes = {'Starting value, time: '+str(start_time): copy.deepcopy(parameters)}
         event_queue = copy.deepcopy(self.master_event_queue)
         event_queue.prep_queue_for_sim_time(start_time, end_time)
         tranfers_list = []
         y = []
         current_time = start_time
         solution_at_t = y0
-        setattr(model_object, arg_attribute, args)
         if full_output:
             run_method = getattr(model_object, run_attribute)
             function_args_inspection = inspect.getfullargspec(run_method)
@@ -91,8 +97,12 @@ class EventQueue:
             info_dict[time_points] = info_sub_dict
             return y_over_current_t_range
 
+
         while event_queue.not_empty():
             next_time, event = event_queue.poptop()
+            if next_time > end_time: # if the next event is after simulation time break out of loop.
+                break
+
             if current_time != next_time:
                 # run until current time is next time
                 current_t_range = np.arange(current_time, next_time+simulation_step, simulation_step)
@@ -112,7 +122,9 @@ class EventQueue:
                                    'event':event.name}
                 tranfers_list.append(transfers_entry)
             elif isinstance(event, ChangeParametersEvent):
-                event.process(model_object, args,  arg_attribute)
+                parameters = event.process(model_object, parameters_attribute, parameters)
+                param_changes[event.name + ', time: ' + str(current_time)] = copy.deepcopy(parameters)
+
 
 
         if current_time != end_time:
@@ -126,9 +138,15 @@ class EventQueue:
         y = np.vstack(y)
         transfers_df = pd.DataFrame(tranfers_list)
         if full_output and full_output_in_func_args:
-            return y, transfers_df, info_dict
+            if return_param_changes:
+                return y, transfers_df, param_changes, info_dict
+            else:
+                return y, transfers_df, info_dict
         else:
-            return y, transfers_df
+            if return_param_changes:
+                return y, transfers_df, param_changes
+            else:
+                return y, transfers_df
 
 
 class _EventQueue:

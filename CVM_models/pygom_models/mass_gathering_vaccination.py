@@ -138,8 +138,6 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                            transition_type=TransitionType.B),
                 Transition(origin='H_T',
                            equation=' + '.join(total_hospitalised),
-                           transition_type=TransitionType.B),
-                Transition(origin='H_T',
-                           equation=' + '.join(total_recovered_from_hosptial),
-                           transition_type=TransitionType.D)
+                           transition_type=TransitionType.B)
+                           transition_type=TransitionType.B)
             ]
