@@ -12,6 +12,9 @@ import json
 import scipy
 import functools
 
+
+def _nesteddictvalues(d):
+    return [index for sub_d in d.values() for index in sub_d.values()]
 class BaseScipyClusterVacModel:
     states = []
     dead_states = []
@@ -90,6 +93,20 @@ class BaseScipyClusterVacModel:
         self.num_param = len(self.all_parameters)
         self.num_piece_wise_params = len(self.params_estimated_via_piecewise_method)
         self.num_non_piece_wise_params = self.num_param - self.num_piece_wise_params
+
+
+    def get_transmission_terms_between(self, clusters):
+        population_terms = []
+        transmission_terms = []
+        for cluster_i in clusters:
+            for cluster_j in clusters:
+                transmission_term = self.transmission_term + '_' + cluster_i + '_' + cluster_j
+                population_term = self.population_term + '_' + cluster_i + '_' + cluster_j
+                if transmission_term not in transmission_terms:
+                    transmission_terms.append(transmission_term)
+                    population_terms.append(population_term)
+        return {self.transmission_term: transmission_terms, self.population_term: population_terms}
+
 
     def gen_group_structure(self, group_structure):
         self.params_estimated_via_piecewise_method = []
@@ -264,8 +281,22 @@ class BaseScipyClusterVacModel:
                     transfer_info_entry['to_index'] = [to_states_dict[state] for state in state_selection]
 
 
-    def _nesteddictvalues(self, d):
-        return [index for sub_d in d.values() for index in sub_d.values()]
+
+    
+    def get_clusters_indexes(self, clusters):
+        indexes = []
+        for cluster in clusters:
+            indexes += _nesteddictvalues(self.state_index[cluster])
+        return indexes
+
+    def get_vaccine_group_indexes(self, vaccine_groups):
+        indexes = []
+        for cluster in self.clusters:
+            for vaccine_group, sub_dict in self.state_index[cluster].items():
+                if vaccine_group in vaccine_groups:
+                    indexes += [sub_dict.values()]
+        return indexes
+        
 
     def foi(self, y, parameters):
         """Calculate force of infection (foi).
@@ -317,10 +348,10 @@ class BaseScipyClusterVacModel:
                 isolation_mod = parameters[self.isolation_modifier]
             else:
                 isolation_mod = 1
-            infectious_symptomatic_indexes = self._nesteddictvalues(self.infectious_symptomatic_indexes)
-            infectious_and_asymptomatic_indexes = self._nesteddictvalues(self.infectious_asymptomatic_indexes)
-            isolating_asymptomatic_indexes = self._nesteddictvalues(self.isolating_asymptomatic_indexes)
-            isolating_symptomatic_indexes = self._nesteddictvalues(self.isolating_symptomatic_indexes)
+            infectious_symptomatic_indexes = _nesteddictvalues(self.infectious_symptomatic_indexes)
+            infectious_and_asymptomatic_indexes = _nesteddictvalues(self.infectious_asymptomatic_indexes)
+            isolating_asymptomatic_indexes = _nesteddictvalues(self.isolating_asymptomatic_indexes)
+            isolating_symptomatic_indexes = _nesteddictvalues(self.isolating_symptomatic_indexes)
             total_asymptomatic = asymptomatic_transmission_modifier *y[infectious_and_asymptomatic_indexes].sum()
             total_symptomatic = y[infectious_symptomatic_indexes].sum()
             total_isolating_asymptomatic = isolation_mod*asymptomatic_transmission_modifier *y[isolating_asymptomatic_indexes].sum()

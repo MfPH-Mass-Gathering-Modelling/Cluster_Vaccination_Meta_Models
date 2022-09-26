@@ -40,7 +40,7 @@ def gen_clusters_vaccine_and_test_structures(clusters):
         # now for tests
         vaccine_groups = ['unvaccinated', 'effective', 'waned', ]
         # LFD test information
-        LFD_positive = cluster + '_LFDpositive'
+        LFD_positive = cluster + '_LFD_positive'
         to_and_from_cluster = {'from_cluster': cluster, 'to_cluster': LFD_positive}
         
         
@@ -59,7 +59,7 @@ def gen_clusters_vaccine_and_test_structures(clusters):
             group_info.append(entry)
 
         # RT_PCR test information
-        PCR_positive_waiting = cluster +'_PCRwaiting'
+        PCR_positive_waiting = cluster +'_PCR_waiting'
         to_and_from_cluster = {'from_cluster': cluster, 'to_cluster': PCR_positive_waiting}
         
         for vaccine_group in vaccine_groups:
@@ -68,7 +68,7 @@ def gen_clusters_vaccine_and_test_structures(clusters):
                      'parameter': 'tau_G', 'states': PCR_true_positive_states}
             group_info.append(entry)
         
-        PCR_positive = cluster +'_PCRpositive'
+        PCR_positive = cluster +'_PCR_positive'
         to_and_from_cluster = {'from_cluster': PCR_positive_waiting, 'to_cluster': PCR_positive}
         
         for vaccine_group in vaccine_groups:

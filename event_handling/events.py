@@ -12,7 +12,16 @@ from pygom.model.base_ode_model import BaseOdeModel
 
 class BaseEvent:
 
-    def __init__(self, name, value=None, factor=None,  proportion=None):
+    def __init__(self, name):
+        self.name = name
+
+
+    def process(self):
+        pass
+
+
+class ValueFactorProportionChangeEvent(BaseEvent):
+    def __init__(self, name, value=None, factor=None, proportion=None):
         self._value = None
         self._factor = None
         self._proportion = None
@@ -31,7 +40,7 @@ class BaseEvent:
             self.value = value
         if proportion is not None:
             self.proportion = proportion
-        self.name = name
+        super().__init__(name=name)
 
     @property
     def proportion(self):
@@ -91,11 +100,8 @@ class BaseEvent:
         self._factor = None
         self._proportion = None
 
-    def process(self):
-        pass
 
-
-class TransferEvent(BaseEvent):
+class TransferEvent(ValueFactorProportionChangeEvent):
     def __init__(self, name, value=None, factor=None,  proportion=None,
                  from_index=None, to_index=None):
         super().__init__(name=name, value=value, factor=factor, proportion=proportion)
@@ -144,7 +150,7 @@ class TransferEvent(BaseEvent):
             if return_total_effected:
                 return transfers.sum()
 
-class ChangeParametersEvent(BaseEvent):
+class ChangeParametersEvent(ValueFactorProportionChangeEvent):
     def __init__(self, name, changing_parameters, value=None, factor=None, proportion=None):
         super().__init__(name=name, value=value, factor=factor, proportion=proportion)
         self.changing_parameters = changing_parameters
@@ -163,11 +169,23 @@ class ChangeParametersEvent(BaseEvent):
                 if self.proportion is not None:
                     parameters[parameter] *= self.proportion
 
-            setattr(model_object, parameters_attribute, parameters)
-            return parameters
+        setattr(model_object, parameters_attribute, parameters)
+        return parameters
 
 
+class ParametersEqualSubPopEvent(BaseEvent):
+    def __init__(self, name, changing_parameters, subpopulation_index):
+        super().__init__(name=name)
+        self.changing_parameters = changing_parameters
+        self.subpopulation_index = subpopulation_index
 
+    def process(self, model_object, parameters_attribute, parameters, y):
+        value = y[self.subpopulation_index].sum()
+        for parameter in self.changing_parameters:
+            parameters[parameter] = value
+
+        setattr(model_object, parameters_attribute, parameters)
+        return parameters
 
 
 

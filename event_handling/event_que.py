@@ -167,6 +167,9 @@ class _EventQueue:
             elif event_information['type'] == 'change parameter':
                 del event_information['type']
                 event = ChangeParametersEvent(event_name, **event_information)
+            elif event_information['type'] == 'parameter equals subpopulation':
+                del event_information['type']
+                event = ParametersEqualSubPopEvent(event, **event_information)
             else:
                 raise ValueError('Event type not known.')
             self._events[event.name] = event

@@ -52,6 +52,8 @@ from seeding.multinomail_seeding import MultnomialSeeder
 from event_handling.event_que import EventQueue
 from cleaning_up_results.results_to_dfs import results_array_to_df, results_df_pivoted
 from setting_up_utils.pop_setup import gen_host_sub_popultion, gen_visitor_sub_population
+from setting_up_utils.cluster_params import (list_to_and_from_cluster_param, list_cluster_param,
+                                             update_params_with_to_from_cluster_param, update_params_with_cluster_param)
 
 # for now assume England vs Wales Ahmed Bin Ali stadium Tuesday 29th Nov
 # Team a: England, Team B: Wales
@@ -63,6 +65,7 @@ visitor_tickets = stadium_capacity - host_tickets
 # Qatar's population 2021
 # https://data.worldbank.org/indicator/SP.POP.TOTL?locations=QA
 qatars_population = 2930524
+host_and_visitor_population = qatars_population +  visitor_tickets
 # From Qatars vaccination data enter populations
 qatar_full_dose = 2751485 # https://coronavirus.jhu.edu/region/qatar
 qatar_booster_dose = 1870034 # assume all booster doses are effectively vaccinated https://covid19.moph.gov.qa/EN/Pages/Vaccination-Program-Data.aspx
@@ -168,6 +171,8 @@ infection_branches = {'asymptomatic': {'E': 'epsilon_1',
 world_cup_seeder = MultnomialSeeder(infection_branches)
 
 #%%
+
+
 # Setting up event_queue.
 start_time = -2
 end_time = 50
@@ -198,19 +203,55 @@ event_info_dict['Pre-travel RTPCR test'] = {'proportion': rtpcr_sensitivity,
                                             #'to_index': rtpcr_to_index,
                                             'times': -1.5,
                                             'type': 'transfer'}
-event_info_dict['supporters arrival'] = {'type': 'change parameter',
-                                         'changing_parameters': ['beta_team_A_supporters','beta_team_B_supporters'],
-                                         'times': 0}
-event_info_dict['match day begins'] = {'type': 'change parameter',
-                                       'changing_parameters': ['beta_team_A_supporters',
-                                                      'beta_team_B_supporters',
-                                                      'beta_host_spectators'],
-                                       'times':3}
-event_info_dict['match day ends'] = {'type': 'change parameter',
-                                     'changing_parameters': ['beta_team_A_supporters',
-                                                    'beta_team_B_supporters',
-                                                    'beta_host_spectators'],
-                                     'times': 4}
+
+# useful lists of clusters
+all_host_not_positive_clusters = ['hosts', 'hosts_PCR_waiting', 'host_spectators_PCR_waiting', 'host_spectators']
+all_vistors_not_positive_clusters = ['team_A_supporters', 'team_A_supporters_PCR_waiting',
+                                     'team_B_supporters', 'team_B_supporters_PCR_waiting']
+match_attendees = all_vistors_not_positive_clusters + ['host_spectators_PCR_waiting', 'host_spectators']
+positive_clusters = [cluster for cluster in world_cup_model.clusters if cluster.endswith('positive')]
+
+pop_visitors_arrive = list_to_and_from_cluster_param('N_',
+                                                     all_host_not_positive_clusters + all_vistors_not_positive_clusters,
+                                                     all_host_not_positive_clusters + all_vistors_not_positive_clusters)
+event_info_dict['supporters arrival pop changes'] = {'type': 'change parameter',
+                                                     'changing_parameters': pop_visitors_arrive,
+                                                     'times': 0,
+                                                     'value': host_and_visitor_population}
+beta_visitors_arrive = list_to_and_from_cluster_param('beta_',
+                                                      all_host_not_positive_clusters + all_vistors_not_positive_clusters,
+                                                      all_vistors_not_positive_clusters)
+event_info_dict['supporters arrival beta changes'] = {'type': 'change parameter',
+                                                      'changing_parameters': beta_visitors_arrive,
+                                                      'times': 0}
+
+pop_match_day_begins = list_to_and_from_cluster_param('N_', world_cup_model.clusters, match_attendees)
+attendee_index = world_cup_model.get_clusters_indexes(match_attendees)
+event_info_dict['match day begins pop changes attendes'] = {'type': 'parameter equals subpopulation',
+                                                            'changing_parameters': pop_match_day_begins,
+                                                            'times':3,
+                                                            'subpopulation_index': attendee_index}
+
+not_attending = ['hosts', 'hosts_PCR_waiting'] + positive_clusters
+pop_match_day_begins_non_attendees = list_to_and_from_cluster_param('N_', world_cup_model.clusters, not_attending)
+non_attendee_index = world_cup_model.get_clusters_indexes(not_attending)
+event_info_dict['match day begins pop changes non-attendes'] = {'type': 'parameter equals subpopulation',
+                                                                'changing_parameters': ['hosts', 'hosts_PCR_waiting'],
+                                                                'times':3,
+                                                                'subpopulation_index': non_attendee_index}
+beta_match_day = list_to_and_from_cluster_param('beta_', match_attendees, match_attendees)
+event_info_dict['match day begins beta changes'] = {'type': 'change parameter',
+                                                    'changing_parameters': beta_match_day,
+                                                    'times':3}
+
+
+event_info_dict['match day ends pop changes'] = {'type': 'change parameter',
+                                                 'changing_parameters': pop_visitors_arrive,
+                                                 'times': 4,
+                                                 'value': host_and_visitor_population}
+event_info_dict['match day ends beta'] = {'type': 'change parameter',
+                                          'changing_parameters': beta_match_day,
+                                          'times': 4}
 transmision_terms = [param for param in world_cup_model.all_parameters if param.startswith('beta')]
 event_info_dict['MGE ends'] = {'type': 'change parameter',
                                'changing_parameters': transmision_terms,
@@ -227,9 +268,18 @@ time.to_csv(save_dir+'/simulation time steps.csv', index=False)
 
 sims_dfs = []
 tranfers_dfs = []
+# helpful dictionaries for sorting out transmission.
+to_tranmission_terms = world_cup_model.transmission_to_terms
+from_tranmission_terms = world_cup_model.transmission_from_terms
+
+#%% Useful functions
+
+
+
 # itterating over sample Dataframe rows
-for sample_index, sample in tqdm(samples_df.iterrows(),
-                                 desc='Latin Hypercube Sample', total=len(samples_df)):
+# for sample_index, sample in tqdm(samples_df.iterrows(),
+#                                  desc='Latin Hypercube Sample', total=len(samples_df)):
+sample_index , sample = next(samples_df.iterrows())
     kappa = sample['isolation']
     p_d = 0.1
     params_needed_for_beta_not_sampled = ['epsilon_3',
@@ -245,7 +295,50 @@ for sample_index, sample in tqdm(samples_df.iterrows(),
     params_for_deriving_beta['kappa_D'] = kappa
     params_for_deriving_beta['p_d'] = p_d
     beta = MGE_beta_no_vaccine_1_cluster(R_0=sample['R0'], **params_for_deriving_beta)
-    beta_for_test_positive = beta*kappa
+    # beta between host clusters starts at default
+
+    test_params = {}
+    update_params_with_to_from_cluster_param(test_params,
+                                             all_host_not_positive_clusters, all_host_not_positive_clusters,
+                                             'beta', beta)
+    params_to_change = update_params_with_to_from_cluster_param(test_params,
+                                                                all_host_not_positive_clusters, all_host_not_positive_clusters,
+                                                                'N', qatars_population,
+                                                                return_list=True) # starts off just Qatari population
+
+
+    # positive will be isolating but interact with all so ...
+    beta_from_test_positive = beta*kappa
+    update_params_with_to_from_cluster_param(test_params,
+                                             world_cup_model.clusters,
+                                             positive_clusters,
+                                             'beta',
+                                             beta_from_test_positive)
+    update_params_with_to_from_cluster_param(test_params,
+                                             world_cup_model.clusters,
+                                             positive_clusters,
+                                             'N',
+                                             host_and_visitor_population)
+    # positive clusters only include infecteds in this model (they cannot be infected again so):
+    update_params_with_to_from_cluster_param(test_params,
+                                             positive_clusters,
+                                             world_cup_model.clusters,
+                                             'beta',
+                                             0)
+    update_params_with_to_from_cluster_param(test_params,
+                                             positive_clusters,
+                                             world_cup_model.clusters,
+                                             'N',
+                                             host_and_visitor_population)
+
+    # %% dealing with visitor transmission
+
+    all_vistors_not_positive_clusters
+
+
+
+
+
     test_params = {
         # Test parameter values - Vaccination parameters
         # These are available at https://docs.google.com/spreadsheets/d/1_XQn8bfPXKA8r1D_rz6Y1LeMTR_Y0RK5Rh4vnxDcQSo/edit?usp=sharing
