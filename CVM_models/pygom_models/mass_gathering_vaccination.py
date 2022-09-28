@@ -11,13 +11,15 @@ from CVM_models.pygom_models.base_vaccination import BaseMultiClusterVacConstruc
 
 
 class MGModelConstructor(BaseMultiClusterVacConstructor):
-    states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A', 'H', 'R']
-    infectious_states = ['P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A']
-    symptomatic_states = ['M_I','F_I','M_D','F_D','H']
-    isolating_states = ['M_D','F_D']
-    universal_params = ['theta', 'p_s', 'epsilon_1', 'epsilon_2', 'p_d', 'epsilon_3',
-                           'p_h', 'gamma_I_1', 'gamma_I_2', 'gamma_A_1', 'gamma_A_2',
-                           'gamma_H', 'alpha']
+    states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_H', 'M_D', 'M_I', 'M_A', 'F_H', 'F_D', 'F_I', 'F_A', 'R']
+    infectious_states = ['P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'M_H', 'F_D', 'F_I', 'F_A']
+    symptomatic_states = ['M_I', 'F_I', 'M_D', 'F_D', 'M_H', 'F_H']
+    isolating_states = ['M_D', 'M_H', 'F_D']
+    infectious_states = ['P_I', 'P_A', 'M_H', 'M_D', 'M_I', 'M_A', 'F_D', 'F_I', 'F_A']
+
+    universal_params = ['theta', 'p_s', 'epsilon_1', 'epsilon_2', 'p_d', 'epsilon_3', 'epsilon_H',
+                        'p_h', 'gamma_I_1', 'gamma_I_2', 'gamma_A_1', 'gamma_A_2',
+                        'gamma_H', 'alpha']
     cluster_specific_params = BaseMultiClusterVacConstructor.cluster_specific_params
     vaccine_specific_params = ['l', 's', 'h']
 
@@ -41,8 +43,8 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
             h_v = 'h_' + vaccine_group
             p_h_v = 'p_h * (1 -' + h_v +')'
 
-            detected_at_hospital = p_h_v +'*' + detected
-            detected_outside_hospital = '(1-' + p_h_v + ')*' + detected
+            detected_at_hospital_pathway = p_h_v +'*' + detected
+            detected_outside_hospital_pathway = '(1-' + p_h_v + ')*' + detected
 
             for cluster_i in self.clusters:
 
@@ -55,18 +57,19 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                 G_A_i_v = "G_A_" + cluster_i + '_' + vaccine_group
                 P_I_i_v = "P_I_" + cluster_i + '_' + vaccine_group
                 P_A_i_v = "P_A_" + cluster_i + '_' + vaccine_group
+                M_H_i_v = "M_H_" + cluster_i + '_' + vaccine_group
                 M_D_i_v = "M_D_" + cluster_i + '_' + vaccine_group
                 M_I_i_v = "M_I_" + cluster_i + '_' + vaccine_group
                 M_A_i_v = "M_A_" + cluster_i + '_' + vaccine_group
+                F_H_i_v = "F_H_" + cluster_i + '_' + vaccine_group
                 F_D_i_v = "F_D_" + cluster_i + '_' + vaccine_group
                 F_I_i_v = "F_I_" + cluster_i + '_' + vaccine_group
                 F_A_i_v = "F_A_" + cluster_i + '_' + vaccine_group
-                H_i_v = "H_" + cluster_i + '_' + vaccine_group
                 R_i_v = "R_" + cluster_i + '_' + vaccine_group
 
 
-                hospitalised = detected_at_hospital + '*' + P_I_i_v
-                hospital_recovery = 'gamma_H*' + H_i_v
+                hospitalised = 'epsilon_H*' + M_H_i_v
+                hospital_recovery = 'gamma_H*' + F_H_i_v
                 if include_observed_states:
                     total_hospitalised.append(hospitalised)
                     total_recovered_from_hosptial.append(hospital_recovery)
@@ -90,11 +93,11 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                equation='epsilon_2*' + G_A_i_v,
                                transition_type=TransitionType.T),
                     # P classes
-                    Transition(origin=P_I_i_v, destination=H_i_v,
-                               equation=hospitalised,
+                    Transition(origin=P_I_i_v, destination=M_H_i_v,
+                               equation=detected_at_hospital_pathway+ '*' + P_I_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=P_I_i_v, destination=M_D_i_v,
-                               equation=detected_outside_hospital+ '*' + P_I_i_v,
+                               equation=detected_outside_hospital_pathway+ '*' + P_I_i_v,
                                transition_type=TransitionType.T),
                     Transition(origin=P_I_i_v, destination=M_I_i_v,
                                equation=undetected_symptomatic + '*' + P_I_i_v,
@@ -103,6 +106,9 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                equation='epsilon_3*' + P_A_i_v,
                                transition_type=TransitionType.T),
                     # M classes
+                    Transition(origin=M_H_i_v, destination=F_H_i_v,
+                               equation=hospitalised,
+                               transition_type=TransitionType.T),
                     Transition(origin=M_D_i_v, destination=F_D_i_v,
                                equation='gamma_I_1*' + M_D_i_v,
                                transition_type=TransitionType.T),
@@ -113,6 +119,9 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                equation='gamma_A_1*' + M_A_i_v,
                                transition_type=TransitionType.T),
                     # F classes
+                    Transition(origin=F_H_i_v, destination=R_i_v,
+                               equation=hospital_recovery,
+                               transition_type=TransitionType.T),
                     Transition(origin=F_D_i_v, destination=R_i_v,
                                equation='gamma_I_2*' + F_D_i_v,
                                transition_type=TransitionType.T),
@@ -123,9 +132,7 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                equation='gamma_A_2*' + F_A_i_v,
                                transition_type=TransitionType.T),
 
-                    Transition(origin=H_i_v, destination=R_i_v,
-                               equation=hospital_recovery,
-                               transition_type=TransitionType.T),
+
                     Transition(origin=R_i_v, destination=S_i_v,
                                equation='alpha*'+ R_i_v,
                                transition_type=TransitionType.T)
@@ -138,6 +145,5 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                            transition_type=TransitionType.B),
                 Transition(origin='H_T',
                            equation=' + '.join(total_hospitalised),
-                           transition_type=TransitionType.B)
                            transition_type=TransitionType.B)
             ]

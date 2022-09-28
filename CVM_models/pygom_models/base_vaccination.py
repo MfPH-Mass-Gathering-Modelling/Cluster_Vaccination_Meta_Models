@@ -18,7 +18,7 @@ class BaseMultiClusterVacConstructor:
     dead_states = []
     universal_params = []
     vaccine_specific_params = []
-    cluster_specific_params = ['N', 'kappa_D']
+    cluster_specific_params = ['kappa']
     vaccine_and_cluster_specific_params = []
 
 
@@ -28,6 +28,7 @@ class BaseMultiClusterVacConstructor:
         self.piecewise_param_est_model = None
         self.all_parameters = None
         self.beta_list = []
+        self.N_list = []
         self.lambda_dict = {}
         self.transmission_combos = []
         self.transitions = []
@@ -81,7 +82,7 @@ class BaseMultiClusterVacConstructor:
                                    for cluster_i in self.clusters]
 
     def _attach_Params(self):
-        self.all_parameters = set(self.universal_params + self.beta_list +
+        self.all_parameters = set(self.universal_params + self.beta_list + self.N_list +
                                   list(self.group_transition_params_dict.keys()))
         dictionary_list = [
             self.vaccine_specific_params_dict,
@@ -155,7 +156,7 @@ class BaseMultiClusterVacConstructor:
         transmission_combo = (cluster_i, cluster_j)
         if transmission_combo not in self.transmission_combos:
             self.transmission_combos.append(transmission_combo)
-            kappa_D = 'kappa_D_' + cluster_j
+            kappa_D = 'kappa_' + cluster_j
             contributers = []
             for infectous_state in self.infectious_states:
                 modifier = ''
@@ -168,17 +169,20 @@ class BaseMultiClusterVacConstructor:
             temp_lambda = [infectous_state + '_' + cluster_j + '_' + vaccine_group
                            for infectous_state in contributers
                            for vaccine_group in self.vaccine_groups]
-            beta = 'beta_' + cluster_i + '_' + cluster_j
-            self.beta_list.append(beta)
             if cluster_i not in self.lambda_dict:
                 self.lambda_dict[cluster_i] = []
-            n_j = 'N_' + cluster_j
+            beta = 'beta_' + cluster_i + '_' + cluster_j
+            if beta not in self.beta_list:
+                self.beta_list.append(beta)
+            n_i_j = 'N_' + cluster_i + '_' + cluster_j
+            if n_i_j not in self.N_list:
+                self.N_list.append(n_i_j)
             cluster_lambda = '(' + '+'.join(temp_lambda) + ')*' + beta
             if len(self.dead_states) > 0:
                 cluster_dead_population = "("+self.cluster_dead_population[cluster_j]+")"
-                cluster_lambda += '/(' +n_j + '-'+ cluster_dead_population + ')'
+                cluster_lambda += '/(' +n_i_j + '-'+ cluster_dead_population + ')'
             else:
-                cluster_lambda += '/' + n_j
+                cluster_lambda += '/' + n_i_j
             self.lambda_dict[cluster_i].append(cluster_lambda)
 
     def append_intra_transmission(self, cluster_i):

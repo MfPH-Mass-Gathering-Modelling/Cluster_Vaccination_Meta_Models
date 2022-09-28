@@ -1,7 +1,7 @@
 """
 Creation:
     Author: Martin Grunnill
-    Date: 31/08/2022
+    Date: 28/08/2022
 Description: Derving R0 for mass gathering model assuming one cluster and no vaccinations.
     
 """
@@ -15,15 +15,15 @@ group_structure = {'clusters': '_',
 mg_model_constuctor = MGModelConstructor(group_structure)
 mg_model = mg_model_constuctor.generate_model(variety='deterministic')
 odes = mg_model.get_ode_eqn()
-graph_dot = mg_model.get_transition_graph(file_name='single_pop_no_vaccine.dot')
-graph_dot.render(filename='../../single_pop_no_vaccine', format='pdf')
+graph_dot = mg_model.get_transition_graph(show=False)
+graph_dot.render(filename='single_pop_no_vaccine', format='pdf')
 mg_model.state_list
 disease_states = ['E____',
                   'G_I____','G_A____',
                   'P_I____','P_A____',
-                  'M_D____','M_I____','M_A____',
-                  'F_D____','F_I____','F_A____',
-                  'H____']
+                  'M_H____','M_D____','M_I____','M_A____',
+                  'F_H____','F_D____','F_I____','F_A____'
+                  ]
 #model_R0 = R0(mg_model, disease_states) #  silenced as it causes NameError: name 'lambda__' is not defined
 #%%
 
@@ -59,15 +59,10 @@ for transition in mg_model_constuctor.transitions:
 mg_model_redefined = DeterministicOde(state=all_states,
                                       param=all_params,
                                       transition=new_transitions)
-graph_dot = mg_model_redefined.get_transition_graph(file_name='single_pop_no_vaccine.dot')
-graph_dot.render(filename='../../single_pop_no_vaccine', format='pdf')
+graph_dot = mg_model_redefined.get_transition_graph(show=False)
+graph_dot.render(filename='single_pop_no_vaccine', format='pdf')
 #%%
-disease_states = ['E',
-                  'G_I','G_A',
-                  'P_I','P_A',
-                  'M_D','M_I','M_A',
-                  'F_D','F_I','F_A',
-                  'H']
+disease_states = [disease_state.removesuffix('____') for disease_state in disease_states]
 model_R0 = R0(ode=mg_model_redefined, disease_state=disease_states)
 # This suggests the R0 is 0. Which we now is wrong.
 F_matrix , V_matrix = pygom.model.epi_analysis.disease_progression_matrices(ode=mg_model_redefined, disease_state=disease_states)
@@ -84,17 +79,19 @@ conv_odes = []
 for ode in odes:
     eval('conv_odes.append('+str(ode)+')')
 odes = sympy.Matrix(conv_odes)
-infecteds_matrix = sympy.Matrix(odes[1:-1])
-infecteds_jacobian = infecteds_matrix.jacobian(X=[E,
-                                                  G_I, G_A,
-                                                  P_I, P_A,
-                                                  M_D, M_I, M_A,
-                                                  F_D, F_I, F_A,
-                                                  H])
+infecteds = odes[1:-1]
+infecteds = sympy.Matrix(odes[1:-1])
+infecteds = infecteds.subs(S, N)
+infecteds_jacobian = infecteds.jacobian(X=[E,
+                                           G_I, G_A,
+                                           P_I, P_A,
+                                           M_H, M_D, M_I, M_A,
+                                           F_H, F_D, F_I, F_A
+                                           ])
 
 
 # e.g. removing people becoming infected from the jacobian above.
-Sigma = infecteds_jacobian.subs(beta,0)
+Sigma = infecteds_jacobian.subs(beta, 0)
 Sigma
 
 # Obtainning matrix  of transitions into of infectious stages (T)
@@ -102,8 +99,7 @@ Sigma
 # Suggest not use T to name a variable could be confused with transpose of a matrix.
 T_inf_births_subs = {eval(param):0
                      for param in all_params
-                     if param not in ['beta', 'theta', 'kappa_D', 'N']}
-T_inf_births_subs[S]= N # Cancel out S and N by substituting S=1 and N=1
+                     if param not in ['beta', 'theta', 'kappa']}
 T_inf_births = infecteds_jacobian.subs(T_inf_births_subs)
 T_inf_births
 

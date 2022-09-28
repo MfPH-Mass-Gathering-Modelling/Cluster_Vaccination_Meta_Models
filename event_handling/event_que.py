@@ -17,8 +17,13 @@ import inspect
 class EventQueue:
 
     def __init__(self, event_info_dict):
-        self.master_event_queue = _EventQueue(event_info_dict)
-        self._events = self.master_event_queue._events
+        self.event_queue = _EventQueue(event_info_dict)
+        self._master_event_queue = copy.deepcopy(self.event_queue)
+        self._events = self.event_queue._events
+
+    def reset_event_queue(self):
+        self.event_queue = copy.deepcopy(self._master_event_queue)
+        self._events = self.event_queue._events
 
     def _event_names_checker(self, event_names):
         if event_names == 'all':
@@ -61,22 +66,22 @@ class EventQueue:
         return list(self._events.keys())
 
     def events_at_same_time(self):
-        return self.master_event_queue.events_at_same_time
+        return self.event_queue.events_at_same_time
 
     def event_names(self):
-        return self.master_event_queue._events.keys()
+        return self.event_queue._events.keys()
 
     def run_simulation(self, model_object, run_attribute, y0, end_time, parameters_attribute, parameters,
                        start_time=0, simulation_step=1,
                        full_output=False, return_param_changes=False,
                        **kwargs_to_pass_to_func):
         if not all(time % simulation_step == 0
-                   for time in self.master_event_queue.times):
+                   for time in self.event_queue.times):
             raise ValueError('All time points for events must be divisible by simulation_step, leaving no remainder.')
         setattr(model_object, parameters_attribute, parameters)
         param_changes = {'Starting value, time: '+str(start_time): copy.deepcopy(parameters)}
-        event_queue = copy.deepcopy(self.master_event_queue)
-        event_queue.prep_queue_for_sim_time(start_time, end_time)
+        sim_event_queue = copy.deepcopy(self.event_queue)
+        sim_event_queue.prep_queue_for_sim_time(start_time, end_time)
         tranfers_list = []
         y = []
         current_time = start_time
@@ -98,8 +103,8 @@ class EventQueue:
             return y_over_current_t_range
 
 
-        while event_queue.not_empty():
-            next_time, event = event_queue.poptop()
+        while sim_event_queue.not_empty():
+            next_time, event = sim_event_queue.poptop()
             if next_time > end_time: # if the next event is after simulation time break out of loop.
                 break
 
