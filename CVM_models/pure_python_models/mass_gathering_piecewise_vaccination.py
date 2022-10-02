@@ -16,7 +16,9 @@ dir_name = os.path.dirname(abspath) +'/'
 
 class MassGatheringModel(BaseScipyClusterVacModel):
     states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_H', 'M_D', 'M_I', 'M_A', 'F_H', 'F_D', 'F_I', 'F_A', 'R']
-    observed_states = ['H_i', 'H_p']
+    observed_states = ['Cumulative hospitalisation', 'Cumulative infections']
+    infected_states = ['E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_H', 'M_D', 'M_I', 'M_A', 'F_H', 'F_D', 'F_I', 'F_A']
+    hospitalised_states = ['M_H']
     infectious_states = ['P_I', 'P_A', 'M_D', 'M_I', 'M_A', 'M_H', 'F_D', 'F_I', 'F_A']
     symptomatic_states = ['M_I', 'F_I', 'M_D', 'F_D', 'M_H', 'F_H']
     isolating_states = ['M_D', 'M_H', 'F_D']
@@ -100,8 +102,8 @@ class MassGatheringModel(BaseScipyClusterVacModel):
                 y_deltas[states_index['F_D']] += prog_late_detected_stage-detected_recovery
                 y_deltas[states_index['F_H']] += hospitalisation - hospital_recovery
                 y_deltas[states_index['R']] += hospital_recovery + asymptomatic_recovery + symptomatic_recovery + detected_recovery - waned_natural_immunity
-                y_deltas[-2] += prog_detected_at_hospital_path - hospital_recovery
-                y_deltas[-1] += prog_detected_at_hospital_path
+                y_deltas[-2] += hospitalisation
+                y_deltas[-1] += infections
                 # self.ode_calls_dict[key] = y_deltas
 
         return y_deltas

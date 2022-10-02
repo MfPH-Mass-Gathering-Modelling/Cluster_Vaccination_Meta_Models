@@ -13,6 +13,8 @@ from pygom.model.base_ode_model import BaseOdeModel
 class BaseEvent:
 
     def __init__(self, name):
+        if not isinstance(name,str):
+            raise TypeError('A name given to an event should be a string.')
         self.name = name
 
 

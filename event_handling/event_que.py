@@ -34,8 +34,10 @@ class EventQueue:
             if any(not isinstance(item, str) for item in event_names):
                 raise TypeError('All event_names entries must be a string.')
             available_event_names = self.get_event_names()
-            if any(not item in available_event_names for item in event_names):
-                raise TypeError('All event_names entries must be a string.')
+            for event_name in event_names:
+                if event_name not in available_event_names:
+                    raise TypeError(event_name + ' not listed in names give to available evednt: ' +
+                                    ','.join(available_event_names) +  '.')
         return event_names
 
     def change_event_proportion(self, event_names, proportion):
@@ -69,7 +71,7 @@ class EventQueue:
         return self.event_queue.events_at_same_time
 
     def event_names(self):
-        return self.event_queue._events.keys()
+        return list(self._events.keys())
 
     def run_simulation(self, model_object, run_attribute, y0, end_time, parameters_attribute, parameters,
                        start_time=0, simulation_step=1,
@@ -174,10 +176,10 @@ class _EventQueue:
                 event = ChangeParametersEvent(event_name, **event_information)
             elif event_information['type'] == 'parameter equals subpopulation':
                 del event_information['type']
-                event = ParametersEqualSubPopEvent(event, **event_information)
+                event = ParametersEqualSubPopEvent(event_name, **event_information)
             else:
                 raise ValueError('Event type not known.')
-            self._events[event.name] = event
+            self._events[event_name] = event
             times_already_in_queue = set(unordered_que.keys()) & times
             if times_already_in_queue:
                 for time in times_already_in_queue:

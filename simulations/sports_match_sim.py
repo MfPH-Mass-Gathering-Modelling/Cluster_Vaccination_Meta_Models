@@ -51,7 +51,6 @@ class SportMatchMGESimulation:
         self._setup_seeder()
         self._setup_event_queue()
 
-
     def _setup_seeder(self):
         infection_branches = {'asymptomatic': {'E': 'epsilon_1',
                                                'G_A': 'epsilon_2',
@@ -76,7 +75,6 @@ class SportMatchMGESimulation:
         # setting up seeding class
         self.seeder = MultnomialSeeder(infection_branches)
 
-
     def _setup_event_queue(self):
         # useful lists of clusters
         self.hosts_main = ['hosts', 'host_spectators','host_staff']
@@ -86,7 +84,7 @@ class SportMatchMGESimulation:
         self.vistors_not_positive = (self.vistors_main +
                                      [cluster +'_PCR_waiting' for cluster in self.vistors_main])
         self.positive_clusters = [cluster for cluster in self.model.clusters if cluster.endswith('positive')]
-
+        self.not_positive_clusters = [cluster for cluster in self.model.clusters if cluster not in self.positive_clusters]
 
         self.match_attendees_main = self.vistors_main + ['host_spectators', 'host_staff']
         self.match_attendees_not_positive = (self.match_attendees_main +
@@ -151,22 +149,24 @@ class SportMatchMGESimulation:
                                                'times': 5.5,
                                                'type': 'transfer'}
 
-        pop_visitors_arrive = list_to_and_from_cluster_param('N_',
-                                                             self.host_not_positive + self.vistors_not_positive,
-                                                             self.host_not_positive + self.vistors_not_positive)
+        pop_visitors_arrive = list_to_and_from_cluster_param('N',
+                                                             to_clusters=self.host_not_positive + self.vistors_not_positive,
+                                                             from_clusters=self.host_not_positive + self.vistors_not_positive)
         all_clusters_index = self.model.get_clusters_indexes(self.model.clusters)
         event_info_dict['visitor arrival pop changes'] = {'type': 'parameter equals subpopulation',
                                                           'changing_parameters': pop_visitors_arrive,
                                                           'times': 0,
                                                           'subpopulation_index': all_clusters_index}
-        beta_visitors_arrive = list_to_and_from_cluster_param('beta_',
-                                                              self.host_not_positive + self.vistors_not_positive,
-                                                              self.vistors_not_positive)
+        beta_visitors_arrive = list_to_and_from_cluster_param('beta',
+                                                              to_clusters=self.host_not_positive + self.vistors_not_positive,
+                                                              from_clusters=self.host_not_positive + self.vistors_not_positive)
         event_info_dict['visitor arrival beta changes'] = {'type': 'change parameter',
                                                            'changing_parameters': beta_visitors_arrive,
                                                            'times': 0}
 
-        pop_match_day_begins = list_to_and_from_cluster_param('N_', self.model.clusters, self.match_attendees_not_positive)
+        pop_match_day_begins = list_to_and_from_cluster_param('N',
+                                                              to_clusters=self.match_attendees_not_positive,
+                                                              from_clusters=self.model.clusters)
         attendee_index = self.model.get_clusters_indexes(self.match_attendees_not_positive)
         event_info_dict['match day begins pop changes attendees'] = {'type': 'parameter equals subpopulation',
                                                                      'changing_parameters': pop_match_day_begins,
@@ -174,14 +174,17 @@ class SportMatchMGESimulation:
                                                                      'subpopulation_index': attendee_index}
 
 
-        pop_match_day_begins_non_attendees = list_to_and_from_cluster_param('N_', self.model.clusters,
-                                                                            self.not_attending_match)
+        pop_match_day_begins_non_attendees = list_to_and_from_cluster_param('N',
+                                                                            to_clusters=self.not_attending_match,
+                                                                            from_clusters=self.model.clusters)
         non_attendee_index = self.model.get_clusters_indexes(self.not_attending_match)
         event_info_dict['match day begins pop changes non-attendees'] = {'type': 'parameter equals subpopulation',
                                                                          'changing_parameters': pop_match_day_begins_non_attendees,
                                                                          'times': 3,
                                                                          'subpopulation_index': non_attendee_index}
-        beta_match_day = list_to_and_from_cluster_param('beta_', self.match_attendees_not_positive, self.match_attendees_not_positive)
+        beta_match_day = list_to_and_from_cluster_param('beta',
+                                                        to_clusters=self.match_attendees_not_positive,
+                                                        from_clusters=self.match_attendees_not_positive)
         event_info_dict['match day begins beta changes'] = {'type': 'change parameter',
                                                             'changing_parameters': beta_match_day,
                                                             'times': 3}
@@ -190,9 +193,9 @@ class SportMatchMGESimulation:
                                                          'changing_parameters': pop_visitors_arrive,
                                                          'times': 4,
                                                          'subpopulation_index': all_clusters_index}
-        event_info_dict['match day ends beta'] = {'type': 'change parameter',
-                                                  'changing_parameters': beta_match_day,
-                                                  'times': 4}
+        event_info_dict['match day ends beta changes'] = {'type': 'change parameter',
+                                                          'changing_parameters': beta_match_day,
+                                                          'times': 4}
         transmision_terms = [param for param in self.model.all_parameters if param.startswith('beta')]
         event_info_dict['MGE ends'] = {'type': 'change parameter',
                                        'changing_parameters': transmision_terms,
@@ -200,8 +203,7 @@ class SportMatchMGESimulation:
                                        'times': 7}
         self.event_queue = EventQueue(event_info_dict)
 
-
-    def run_simulation(self, sampled_parameters):
+    def run_simulation(self, sampled_parameters, return_full_results=True):
         # reset any changes in event queue caused by previously running self.run_simulation
         self.event_queue.reset_event_queue()
         parameters = {**self.fixed_parameters, **sampled_parameters}
@@ -210,9 +212,7 @@ class SportMatchMGESimulation:
         visitor_tickets = self.stadium_capacity - host_tickets
         host_and_visitor_population = self.host_population + visitor_tickets
         staff = round(self.stadium_capacity*parameters['staff per ticket'])
-        
-        
-        
+
         # Setup starting transmission and changes in transmission
         beta_derive_func_args = list(inspect.signature(MGE_beta_no_vaccine_1_cluster).parameters.keys())
         params_for_deriving_beta = {param: parameters[param]
@@ -227,7 +227,18 @@ class SportMatchMGESimulation:
                                                  self.positive_clusters,
                                                  'beta',
                                                  beta_from_test_positive)
-        # There population only gets added to once pre match testing begins so ..
+        # likewise for all positive clusters detected isolation is unaffected as they are isolating already.
+        update_params_with_cluster_param(parameters,
+                                         self.positive_clusters,
+                                         'kappa',
+                                         1)
+        # for all other clusters this takes the value of kappa.
+        update_params_with_cluster_param(parameters,
+                                         self.not_positive_clusters,
+                                         'kappa',
+                                         parameters['kappa'])
+
+        # There positive population only gets added to once pre match testing begins so ..
         update_params_with_to_from_cluster_param(parameters,
                                                  self.model.clusters,
                                                  self.positive_clusters,
@@ -249,7 +260,7 @@ class SportMatchMGESimulation:
         update_params_with_to_from_cluster_param(parameters,
                                                  self.host_not_positive, self.host_not_positive,
                                                  'beta', beta)
-        # all transmission events to hosts happens in there population to begin with.
+        # all transmission to hosts happens in there population to begin with.
         update_params_with_to_from_cluster_param(parameters,
                                                  self.host_not_positive, self.model.clusters,
                                                  'N',
@@ -261,6 +272,10 @@ class SportMatchMGESimulation:
         update_params_with_to_from_cluster_param(parameters,
                                                  self.model.clusters, self.vistors_not_positive,
                                                  'beta', 0)
+        # or get transmited to begin with.
+        update_params_with_to_from_cluster_param(parameters,
+                                                 self.vistors_not_positive, self.model.clusters,
+                                                 'beta', 0)
         # all vistor population are half the number of visitor tickets to begin with
         update_params_with_to_from_cluster_param(parameters,
                                                  self.vistors_not_positive, self.model.clusters,
@@ -270,7 +285,8 @@ class SportMatchMGESimulation:
         self.event_queue.change_event_value('visitor arrival beta changes', beta)
 
         # match day begins
-        self.event_queue.change_event_value('match day begins beta changes', beta * parameters['increase in transmission'])
+        self.event_queue.change_event_value('match day begins beta changes',
+                                            beta * parameters['relative increase in transmission'])
 
         # match day ends
         self.event_queue.change_event_value('match day ends beta changes', beta)
@@ -330,12 +346,14 @@ class SportMatchMGESimulation:
                                                 'hospitalised': hospitalised_prob}
                 seeds = self.seeder.seed_infections(s_vs_infections['infections'],
                                                     infection_branch_proportions,
-                                                    parameters)
+                                                    {key: value for key, value in parameters.items()
+                                                     if key in self.seeder.parameters})
                 for state, population in seeds.items():
                     y0[state_index_sub_pop[state]] = population
 
         # Runninng mg_model
-        parameters_needed_for_model = {parameter for parameter in parameters if parameter in self.model.all_parameters}
+        parameters_needed_for_model = {key: value for key, value in parameters.items()
+                                       if key in self.model.all_parameters}
         self.model.parameters = parameters_needed_for_model
         solution, transfers_df = self.event_queue.run_simulation(model_object=self.model,
                                                                  run_attribute='integrate',
@@ -344,13 +362,24 @@ class SportMatchMGESimulation:
                                                                  y0=y0,
                                                                  end_time=self.end_time, start_time=self.start_time,
                                                                  simulation_step=self.time_step)
-        sol_df = results_array_to_df(solution, self.model.state_index,
-                                     start_time=self.start_time, simulation_step=self.time_step, end_time=self.end_time)
-        if 'save prefix' in parameters.keys():
-            sol_df.to_csv(parameters['save prefix'] + ' simulation.csv', index_label='time')
-            transfers_df.to_csv(parameters['save prefix']+' tranfers.csv', index=False)
+        infection_prevelances = solution[:, self.model.infected_states_index_list]
+        all_infection_prevelances = infection_prevelances.sum(axis=1)
+        peak_infected = all_infection_prevelances.max()
+        total_infections = solution[-1, -1]
+        hospital_prevelances = solution[:, self.model.hospitalised_states_index_list]
+        all_hospitalisation_prevelances = hospital_prevelances.sum(axis=1)
+        peak_hospitalised = all_hospitalisation_prevelances.max()
+        total_hospitalisations = solution[-1, -2]
+        focused_ouputs = {'peak infectioed': peak_infected,
+                          'total infections': total_infections,
+                          'peak hospitalised': peak_hospitalised,
+                          'total hospitalisations': total_hospitalisations}
+        if return_full_results:
+            sol_df = results_array_to_df(solution, self.model.state_index,
+                                         start_time=self.start_time, simulation_step=self.time_step, end_time=self.end_time)
+            return focused_ouputs, sol_df, transfers_df
         else:
-            return sol_df, transfers_df
+            return focused_ouputs
 
 
 

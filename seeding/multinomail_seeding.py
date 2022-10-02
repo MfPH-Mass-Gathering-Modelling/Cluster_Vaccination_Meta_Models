@@ -53,7 +53,9 @@ class MultnomialSeeder:
         if not isinstance(branch_info,dict):
             raise TypeError('branch_info should be a dictionary.')
         self.branches = {}
+        self.parameters = set()
         for branch_name, outflows in branch_info.items():
+            self.parameters.update(list(outflows.values()))
             if not isinstance(branch_info, dict):
                 raise TypeError('branch_info should be a dictionary of dictionaries.')
             self.branches[branch_name] = InfectionBranch(branch_name, outflows)

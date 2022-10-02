@@ -19,6 +19,8 @@ class BaseScipyClusterVacModel:
     states = []
     dead_states = []
     observed_states = []
+    infected_states = []
+    hospitalised_states = []
     infectious_states = []
     symptomatic_states = []
     isolating_states = []
@@ -36,6 +38,8 @@ class BaseScipyClusterVacModel:
 
     def __init__(self, group_structure):
         self.all_parameters = set(self.non_transmission_universal_params)
+        if self.asymptomatic_transmission_modifier is not None:
+            self.all_parameters.add(self.asymptomatic_transmission_modifier)
         self.gen_group_structure(group_structure)
         self.all_parameters.update([param + '_' + vaccine_group
                                     for vaccine_group in self.vaccine_groups
@@ -231,7 +235,9 @@ class BaseScipyClusterVacModel:
         self.infectious_asymptomatic_indexes = {}
         self.isolating_asymptomatic_indexes = {}
         self.isolating_symptomatic_indexes = {}
-        self.dead_states_indexes = []
+        self.infected_states_index_list = []
+        self.hospitalised_states_index_list = []
+        self.dead_states_index_list = []
         # populating index dictionaries
         index = 0
         for cluster in self.clusters:
@@ -253,8 +259,12 @@ class BaseScipyClusterVacModel:
                         self.isolating_symptomatic_indexes[cluster].append(index)
                     if state in self.isolating_and_asymptomatic_states:
                         self.isolating_asymptomatic_indexes[cluster].append(index)
+                    if state in self.infected_states:
+                        self.infected_states_index_list.append(index)
+                    if state in self.hospitalised_states:
+                        self.hospitalised_states_index_list.append(index)
                     if state in self.dead_states:
-                        self.dead_states_indexes.append(index)
+                        self.dead_states_index_list.append(index)
                     index += 1
 
         self.state_index['observed_states'] = {}
