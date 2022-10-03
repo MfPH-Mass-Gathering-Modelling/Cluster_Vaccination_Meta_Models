@@ -203,7 +203,7 @@ class SportMatchMGESimulation:
                                        'times': 7}
         self.event_queue = EventQueue(event_info_dict)
 
-    def run_simulation(self, sampled_parameters, return_full_results=True):
+    def run_simulation(self, sampled_parameters, return_full_results=False):
         # reset any changes in event queue caused by previously running self.run_simulation
         self.event_queue.reset_event_queue()
         parameters = {**self.fixed_parameters, **sampled_parameters}
@@ -370,7 +370,7 @@ class SportMatchMGESimulation:
         all_hospitalisation_prevelances = hospital_prevelances.sum(axis=1)
         peak_hospitalised = all_hospitalisation_prevelances.max()
         total_hospitalisations = solution[-1, -2]
-        focused_ouputs = {'peak infectioed': peak_infected,
+        focused_ouputs = {'peak infected': peak_infected,
                           'total infections': total_infections,
                           'peak hospitalised': peak_hospitalised,
                           'total hospitalisations': total_hospitalisations}

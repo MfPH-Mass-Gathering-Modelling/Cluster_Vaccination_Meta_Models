@@ -31,7 +31,7 @@ def MGE_R0_no_vaccine_1_cluster(beta, kappa, theta,
           beta * theta / epsilon_3)
     return R0
 
-def MGE_beta_no_vaccine_1_cluster(R_0, kappa, theta,
+def MGE_beta_no_vaccine_1_cluster(R0, kappa, theta,
                                   epsilon_3, epsilon_H,
                                   gamma_A_1, gamma_A_2, gamma_I_1, gamma_I_2,
                                   p_d, p_h, p_s):
@@ -40,7 +40,7 @@ def MGE_beta_no_vaccine_1_cluster(R_0, kappa, theta,
         See Dervinng_R0_and_beta_for_1_cluster_no_vaccine.py for dervation.
     """
 
-    numrator = R_0 * epsilon_3 * epsilon_H * gamma_A_1 * gamma_A_2 * gamma_I_1 * gamma_I_2
+    numrator = R0 * epsilon_3 * epsilon_H * gamma_A_1 * gamma_A_2 * gamma_I_1 * gamma_I_2
     denominator = (-epsilon_3 * epsilon_H * gamma_A_1 * gamma_A_2 * gamma_I_1 * kappa * p_d * p_h * p_s +
                    epsilon_3 * epsilon_H * gamma_A_1 * gamma_A_2 * gamma_I_1 * kappa * p_d * p_s - epsilon_3 * epsilon_H * gamma_A_1 * gamma_A_2 * gamma_I_1 * p_d * p_s +
                    epsilon_3 * epsilon_H * gamma_A_1 * gamma_A_2 * gamma_I_1 * p_s - epsilon_3 * epsilon_H * gamma_A_1 * gamma_A_2 * gamma_I_2 * kappa * p_d * p_h * p_s +

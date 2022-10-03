@@ -1,7 +1,7 @@
 """
 Creation:
     Author: Martin Grunnill
-    Date: 28/09/2022
+    Date: 03/10/2022
 Description: Test run of world cup match simulation.
     
 """
@@ -15,7 +15,7 @@ import pandas as pd
 
 from simulations.sports_match_sim import SportMatchMGESimulation
 
-# for now assume England vs Wales Ahmed Bin Ali stadium Tuesday 29th Nov
+# for now assume England vs Wales Ahmed Bin Ali stadium Tuesday 29th Nov FIFA World Cup 2022
 # Team a: England, Team B: Wales
 
 
@@ -46,7 +46,7 @@ sport_match_sim = SportMatchMGESimulation(host_population, host_cases_per_millio
 #%%
 nu = 0 # change between vaccination groups.
 parameters = {    # Test parameter values - Vaccination parameters
-    'R_0': 3,
+    'R0': 3,
     'relative increase in transmission': 1.5,
     'kappa': 0.75,
     'p_d': 0.1,
@@ -98,16 +98,8 @@ parameters = {    # Test parameter values - Vaccination parameters
     'team B cases per million': team_B_cases_per_million
 }
 
-solution, transfers_df = sport_match_sim.run_simulation(parameters)
-model = sport_match_sim.model
-infection_prevelances = solution[:, model.infected_states_index_list]
-all_infection_prevelances = infection_prevelances.sum(axis=1)
-peak_infections = all_infection_prevelances.max()
-total_infections = solution[-1,-1]
-hospital_prevelances = solution[:, model.hospitalised_states_index_list]
-all_hospitalisation_prevelances = hospital_prevelances.sum(axis=1)
-peak_hospitalisations =all_hospitalisation_prevelances.max()
-total_hospitalisations = solution[-1,-2]
+focused_ouputs, sol_df, transfers_df = sport_match_sim.run_simulation(parameters, return_full_results=True)
+
 
 
 
