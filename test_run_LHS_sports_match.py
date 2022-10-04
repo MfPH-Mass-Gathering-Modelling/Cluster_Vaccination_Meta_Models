@@ -5,7 +5,6 @@ Creation:
 Description: Test run of world cup match simulation with latin hypercube sampling (LHS) and alternate travel screenings.
     
 """
-import dask
 #%%
 # import packages
 
@@ -13,7 +12,7 @@ import numpy as np
 import json
 import os.path
 import pandas as pd
-from tqdm import trange
+from tqdm.auto import tqdm
 
 from simulations.sports_match_sim import SportMatchMGESimulation
 
@@ -99,116 +98,22 @@ sport_match_sim = SportMatchMGESimulation(host_population, host_cases_per_millio
 
 #%%
 import pandas as pd
-from dask import delayed
 import os
 from scipy.stats import qmc
-import psutil
-from dask.diagnostics import ProgressBar
-from dask.distributed import Client
-# import Quasi-Monte Carlo submodule
-import pingouin as pg
-
+from LH_sampling.gen_LHS_and_sim_serial import LHS_determine_sample_size
+parameters_df = pd.read_csv('Test Parameter distributions.csv')
 number_of_workers = os.cpu_count()  # alter this if you do not want all your computing resources used.
 
-client = Client(processes=False, n_workers=2,threads_per_worker=1)
-client.dashboard_link
 
-#%%
 
-def format_sample(parameters_df, LH_samples):
-    if any(~parameters_df['Distribution'].isin(['boolean','uniform'])):
-        raise ValueError('Only Boolean and Uniform distributions currently supported.')
-    samples_df = pd.DataFrame(qmc.scale(LH_samples, parameters_df['Lower Bound'], parameters_df['Upper Bound']),
-                              columns=parameters_df['Parameter'])
-    convert_to_bool = parameters_df.Parameter[parameters_df['Distribution'] == 'boolean']
-    for parameter in convert_to_bool:
-        samples_df[parameter] = samples_df[parameter] >= 0.5
-    return samples_df
-
-@delayed
-def df_to_records(df):
-    return df.to_dict('records')
-
-@delayed
-def df_horizontal_concat(df1, df2):
-    return pd.concat([df1, df2], axis=1)
-
-@delayed
-def calulate_PRCC(df, parameter, output, covariables):
-    param_rank_pcor = pg.partial_corr(df,
-                                      x=parameter, y=output,
-                                      covar=covariables,
-                                      method='spearman')
-    return param_rank_pcor.loc['spearman', 'r']
-
-def _run_to_get_out_keys(model_run_method, parameters_df):
-    sample = dict(zip(parameters_df['Parameter'], parameters_df['Lower Bound']))
-    run_to_get_out_put_keys = model_run_method(sample)
-    return list(run_to_get_out_put_keys.keys())
-
-parameters_df = pd.read_csv('Test Parameter distributions.csv')
-LHS_obj = qmc.LatinHypercube(len(parameters_df))
+repeats_per_n = 20
+start_n = 1000
+std_aim = 0.05
 model_run_method = sport_match_sim.run_simulation
-sample_size = 10
-repeats_per_sample_size = 20
-output_keys = ['peak infected', 'total infections', 'peak hospitalised', 'total hospitalisations']
-y0 = None
-
-
-
-
-
-#%%
-# def run_many_LHS_determine_prcc(parameters_df,
-#                                 LHS_obj,
-#                                 model_run_method,
-#                                 sample_size,
-#                                 repeats_per_sample_size,
-#  output_keys=None,
-#                                 y0=None):
-gen_rand_LH_sample = delayed(LHS_obj.random)
-model_run_method = delayed(model_run_method)
-records_to_df = delayed(pd.DataFrame.from_records)
-# format_sample = delayed(format_sample)
-prcc_measures = []
-# if output_keys is None:
-#     output_keys = _run_to_get_out_keys(model_run_method, parameters_df)
-# for repeat_num in range(repeats_per_sample_size):
-LH_sample = LHS_obj.random(sample_size)
-sample_df = format_sample(parameters_df, LH_sample)
-focused_results_records = []
-samples = sample_df.to_dict('records')
-for sample_index in range(sample_size):
-    sample = samples[sample_index]
-    if y0 is None:
-        focused_results_records.append(model_run_method(sample))
-    else:
-        focused_results_records.append(model_run_method(y0=y0, args=sample))
-# records_to_df = dask.persist()
-focused_results_records = dask.persist(*focused_results_records)
-focused_results_df = records_to_df(focused_results_records)
-# focused_results_df.visualize(filename='task graph.pdf')
-results = focused_results_df.compute()
-
-
-
-#%%
-
-
-
-sample_df = df_horizontal_concat(sample_df, focused_results_df)
-prcc_measure_enty = {}
-    for parameter in parameters_df['Parameter']:
-        covariables = [item
-                       for item in parameters_df['Parameter']
-                       if item != parameter]
-        for output in output_keys:
-            prcc = calulate_PRCC(sample_df, parameter, output, covariables)
-            prcc_measure_enty[parameter + ' on ' + output] = prcc
-    prcc_measures.append(prcc_measure_enty)
-prcc_measures_df = records_to_df(prcc_measures)
-# prcc_measures_df.visualize(filename='task graph.pdf')
-
-prcc_measures_df = prcc_measures_df.compute()
-
-prccs_descriptive_stats = prcc_measures_df.describe()
+LHS_determine_sample_size(parameters_df,
+                          model_run_method,
+                          start_n,
+                          repeats_per_n,
+                          std_aim,
+                          n_increase_multiple = 2,
+                          save_dir_for_prcc_decriptive_stats='test determining LH sample size')
