@@ -192,8 +192,8 @@ class _EventQueue:
                 times -= times_already_in_queue
             unordered_que.update({time: event for time in times})
         self.queue = OrderedDict(sorted(unordered_que.items()))
-        if self.events_at_same_time:
-            warn('Concuring events in event queue. To view use method "events_at_same_time".')
+        # if self.events_at_same_time:
+        #     warn('Concuring events in event queue. To view use method "events_at_same_time".')
 
     def poptop(self):
         if self.queue: # OrderedDicts if not empty are seen as True in bool statements.

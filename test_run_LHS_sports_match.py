@@ -100,20 +100,11 @@ sport_match_sim = SportMatchMGESimulation(host_population, host_cases_per_millio
 import pandas as pd
 import os
 from scipy.stats import qmc
-from LH_sampling.gen_LHS_and_sim_serial import LHS_determine_sample_size
-parameters_df = pd.read_csv('Test Parameter distributions.csv')
+from LH_sampling import LHS_and_PRCC_parallel
+parameters_csv_file = 'Test Parameter distributions.csv'
 number_of_workers = os.cpu_count()  # alter this if you do not want all your computing resources used.
 
 
-
-repeats_per_n = 20
-start_n = 1000
-std_aim = 0.05
+sample_size = 1000
 model_run_method = sport_match_sim.run_simulation
-LHS_determine_sample_size(parameters_df,
-                          model_run_method,
-                          start_n,
-                          repeats_per_n,
-                          std_aim,
-                          n_increase_multiple = 2,
-                          save_dir_for_prcc_decriptive_stats='test determining LH sample size')
+prccs = LHS_and_PRCC_parallel.main(parameters_csv_file, sample_size, model_run_method)
