@@ -32,8 +32,6 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
             total_detected_cases = []
         super().__init__(group_structure)
 
-        detected = 'p_d*epsilon_3'
-        undetected_symptomatic = '(1-p_d)*epsilon_3'
         for vaccine_stage, vaccine_group in enumerate(self.vaccine_groups):
             l_v = 'l_' + vaccine_group
 
@@ -43,8 +41,6 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
             h_v = 'h_' + vaccine_group
             p_h_v = 'p_h * (1 -' + h_v +')'
 
-            detected_at_hospital_pathway = p_h_v +'*' + detected
-            detected_outside_hospital_pathway = '(1-' + p_h_v + ')*' + detected
 
             for cluster_i in self.clusters:
 
@@ -67,13 +63,16 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                 F_A_i_v = "F_A_" + cluster_i + '_' + vaccine_group
                 R_i_v = "R_" + cluster_i + '_' + vaccine_group
 
-
+                prog_symptoms = 'epsilon_3 *'+P_I_i_v
+                prog_hospitalised_pathway = p_h_v + '*' + prog_symptoms
+                prog_detected_path = '(1-'+p_h_v+')*p_d*'+prog_symptoms
+                prog_symptomatic_undetected_path = '(1-'+p_h_v+')*(1-p_d)*'+prog_symptoms
                 hospitalised = 'epsilon_H*' + M_H_i_v
                 hospital_recovery = 'gamma_H*' + F_H_i_v
                 if include_observed_states:
                     total_hospitalised.append(hospitalised)
                     total_recovered_from_hosptial.append(hospital_recovery)
-                    total_detected_cases.append(detected+'*'+P_I_i_v)
+                    total_detected_cases.append(prog_detected_path+prog_hospitalised_pathway)
                 self.transitions += [
                     Transition(origin=S_i_v, destination=E_i_v,
                                equation=lambda_i_v + '*' + S_i_v,
@@ -94,13 +93,13 @@ class MGModelConstructor(BaseMultiClusterVacConstructor):
                                transition_type=TransitionType.T),
                     # P classes
                     Transition(origin=P_I_i_v, destination=M_H_i_v,
-                               equation=detected_at_hospital_pathway+ '*' + P_I_i_v,
+                               equation=prog_hospitalised_pathway,
                                transition_type=TransitionType.T),
                     Transition(origin=P_I_i_v, destination=M_D_i_v,
-                               equation=detected_outside_hospital_pathway+ '*' + P_I_i_v,
+                               equation=prog_detected_path,
                                transition_type=TransitionType.T),
                     Transition(origin=P_I_i_v, destination=M_I_i_v,
-                               equation=undetected_symptomatic + '*' + P_I_i_v,
+                               equation=prog_symptomatic_undetected_path,
                                transition_type=TransitionType.T),
                     Transition(origin=P_A_i_v, destination=M_A_i_v,
                                equation='epsilon_3*' + P_A_i_v,

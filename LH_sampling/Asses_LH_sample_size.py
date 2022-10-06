@@ -19,10 +19,10 @@ def determine_LH_sample_size(parameters_df,
                              repeats_per_n,
                              std_aim,
                              LHS_PRCC_method,
+                             save_dir_for_prcc_decriptive_stats,
                              attempts_to_make=float('inf'),
                              n_increase_addition = None,
                              n_increase_multiple = None,
-                             save_dir_for_prcc_decriptive_stats =None,
                              y0=None):
     if n_increase_addition is not None:
         if not isinstance(n_increase_addition,int):
@@ -48,20 +48,24 @@ def determine_LH_sample_size(parameters_df,
 
     while attempts_made < attempts_to_make and not std_to_mean_aim_reached:
         prcc_measures = []
-        range_of_repeats = range(repeats_per_n)
-        for repeat_num in tqdm(range_of_repeats, leave=False, position=0, colour='blue',
-                               desc='LHS resample sample size of '+str(sample_size)):
-            prcc_measure_enty = LHS_PRCC_method(parameters_df, sample_size, model_run_method, LHS_obj=LHS_obj, y0=y0)
-            prcc_measures.append(prcc_measure_enty['r'])
-        prcc_measures_df = pd.concat(prcc_measures, axis=1)
-        prcc_measures_df.columns = range_of_repeats
-        prcc_measures_df = prcc_measures_df.transpose(copy=True)
-        prcc_decriptive_stats = prcc_measures_df.describe()
-        if save_dir_for_prcc_decriptive_stats is not None:
-            prcc_decriptive_stats.to_csv(save_dir_for_prcc_decriptive_stats +
-                                         '/PRCC descriptive stats at sample size ' +
-                                         str(sample_size) + '.csv')
-            max_std = prcc_decriptive_stats.loc['std', :].max()
+        save_prcc_stats_file = (save_dir_for_prcc_decriptive_stats +
+                                '/PRCC descriptive stats at sample size ' +
+                                str(sample_size) + '.csv')
+        if not os.path.isfile(save_prcc_stats_file):
+            range_of_repeats = range(repeats_per_n)
+            for repeat_num in tqdm(range_of_repeats, leave=False, position=0, colour='blue',
+                                   desc='LHS resample sample size of '+str(sample_size)):
+                prcc_measure_enty = LHS_PRCC_method(parameters_df, sample_size, model_run_method, LHS_obj=LHS_obj, y0=y0)
+                prcc_measures.append(prcc_measure_enty['r'])
+            prcc_measures_df = pd.concat(prcc_measures, axis=1)
+            prcc_measures_df.columns = range_of_repeats
+            prcc_measures_df = prcc_measures_df.transpose(copy=True)
+            prcc_decriptive_stats = prcc_measures_df.describe()
+            prcc_decriptive_stats.to_csv(save_prcc_stats_file)
+        else:
+            prcc_decriptive_stats = pd.read_csv(save_prcc_stats_file, index_col=0)
+
+        max_std = prcc_decriptive_stats.loc['std', :].max()
         if max_std > std_aim:
             if n_increase_addition is not None:
                 sample_size += n_increase_addition
