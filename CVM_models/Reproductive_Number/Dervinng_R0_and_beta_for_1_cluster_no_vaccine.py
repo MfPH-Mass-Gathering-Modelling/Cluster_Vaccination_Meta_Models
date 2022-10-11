@@ -115,15 +115,17 @@ eigen_values = K_L.eigenvals()
 eigen_values
 none_zero_eigen_values = [item for item in eigen_values.keys() if item !=0]
 sympy_R0 = none_zero_eigen_values[0]
+#%%
 sympy_R0 = sympy.simplify(sympy_R0)
 sympy_R0 = sympy.simplify(sympy_R0) # I think this is correct will have to check.
 
 #%%
 # Dervining Beta
 
-R_0 = sympy.symbols('R_0')
-eq_R0 = sympy.Eq(sympy_R0, R_0)
+R0 = sympy.symbols('R0')
+eq_R0 = sympy.Eq(sympy_R0, R0)
 beta_eq = sympy.solve(eq_R0, beta)
 beta_eq = beta_eq[0]
+#%%
 beta_eq = sympy.simplify(beta_eq) # I think this is correct will have to check.
 beta_eq = sympy.simplify(beta_eq) # I think this is correct will have to check.

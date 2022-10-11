@@ -63,12 +63,14 @@ class BaseScipyClusterVacModel:
                                                         self.population_term: []
                                                         } for cluster_j in self.clusters}
             for cluster_i in self.clusters:
+                term = self.population_term + '_' + cluster_i
+                self.all_parameters.add(term)
+                self.transmission_to_terms[cluster_i][self.population_term].append(term)
                 for cluster_j in self.clusters:
-                    for param in [self.transmission_term, self.population_term]:
-                        term = param + '_' + cluster_i + '_' + cluster_j
-                        self.all_parameters.add(term)
-                        self.transmission_to_terms[cluster_i][param].append(term)
-                        self.transmission_from_terms[cluster_j][param].append(term)
+                    term = self.transmission_term + '_' + cluster_i + '_' + cluster_j
+                    self.all_parameters.add(term)
+                    self.transmission_to_terms[cluster_i][self.transmission_term].append(term)
+                    self.transmission_from_terms[cluster_j][self.transmission_term].append(term)
         if self.isolation_cluster_specfic:
             if self.isolation_modifier is None:
                 raise AssertionError('isolation_modifier must be specifed to be considered cluster specific')
@@ -329,9 +331,10 @@ class BaseScipyClusterVacModel:
             fois = {}
             for cluster_i in self.clusters:
                 foi = 0
+                contactable_population = parameters[self.population_term + '_' + cluster_i]
                 for cluster_j in self.clusters:
                     beta = parameters[self.transmission_term + '_' + cluster_i + '_' + cluster_j]
-                    contactable_population = parameters[self.population_term + '_' + cluster_i + '_' + cluster_j]
+
                     if self.isolation_modifier is not None:
                         if self.isolation_cluster_specfic:
                             isolation_mod = parameters[self.isolation_modifier + '_' +cluster_j]

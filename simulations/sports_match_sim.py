@@ -94,7 +94,7 @@ class SportMatchMGESimulation:
 
         # Setting up event_queue.
         self.start_time = -2
-        self.end_time = 75
+        self.end_time = 50
         self.time_step = 0.5 # https://bmcinfectdis.biomedcentral.com/articles/10.1186/s12879-021-06528-3#:~:text=This%20systematic%20review%20has%20identified,one%20single%20centred%20trial%20(BD
 
         event_info_dict = {}
@@ -149,9 +149,8 @@ class SportMatchMGESimulation:
                                                'times': 5.5,
                                                'type': 'transfer'}
 
-        pop_visitors_arrive = list_to_and_from_cluster_param('N',
-                                                             to_clusters=self.host_not_positive + self.vistors_not_positive,
-                                                             from_clusters=self.host_not_positive + self.vistors_not_positive)
+        pop_visitors_arrive = list_cluster_param('N',
+                                                 clusters=self.host_not_positive + self.vistors_not_positive)
         all_clusters_index = self.model.get_clusters_indexes(self.model.clusters)
         event_info_dict['visitor arrival pop changes'] = {'type': 'parameter equals subpopulation',
                                                           'changing_parameters': pop_visitors_arrive,
@@ -164,9 +163,8 @@ class SportMatchMGESimulation:
                                                            'changing_parameters': beta_visitors_arrive,
                                                            'times': 0}
 
-        pop_match_day_begins = list_to_and_from_cluster_param('N',
-                                                              to_clusters=self.match_attendees_not_positive,
-                                                              from_clusters=self.model.clusters)
+        pop_match_day_begins = list_cluster_param('N',
+                                                  clusters=self.match_attendees_not_positive)
         attendee_index = self.model.get_clusters_indexes(self.match_attendees_not_positive)
         event_info_dict['match day begins pop changes attendees'] = {'type': 'parameter equals subpopulation',
                                                                      'changing_parameters': pop_match_day_begins,
@@ -174,9 +172,8 @@ class SportMatchMGESimulation:
                                                                      'subpopulation_index': attendee_index}
 
 
-        pop_match_day_begins_non_attendees = list_to_and_from_cluster_param('N',
-                                                                            to_clusters=self.not_attending_match,
-                                                                            from_clusters=self.model.clusters)
+        pop_match_day_begins_non_attendees = list_cluster_param('N',
+                                                                clusters=self.not_attending_match)
         non_attendee_index = self.model.get_clusters_indexes(self.not_attending_match)
         event_info_dict['match day begins pop changes non-attendees'] = {'type': 'parameter equals subpopulation',
                                                                          'changing_parameters': pop_match_day_begins_non_attendees,
@@ -239,32 +236,27 @@ class SportMatchMGESimulation:
                                          parameters['kappa'])
 
         # There positive population only gets added to once pre match testing begins so ..
-        update_params_with_to_from_cluster_param(parameters,
-                                                 self.model.clusters,
-                                                 self.positive_clusters,
-                                                 'N',
-                                                 host_and_visitor_population)
+        update_params_with_cluster_param(parameters,
+                                         self.positive_clusters,
+                                         'N',
+                                         host_and_visitor_population)
         # positive clusters only include infecteds in this model (they cannot be infected again so):
         update_params_with_to_from_cluster_param(parameters,
                                                  self.positive_clusters,
                                                  self.model.clusters,
                                                  'beta',
                                                  0)
-        update_params_with_to_from_cluster_param(parameters,
-                                                 self.positive_clusters,
-                                                 self.model.clusters,
-                                                 'N',
-                                                 host_and_visitor_population)
         
         # beta between host clusters starts at default and stays same until 'MGE ends' event
         update_params_with_to_from_cluster_param(parameters,
-                                                 self.host_not_positive, self.host_not_positive,
+                                                 self.host_not_positive,
+                                                 self.host_not_positive,
                                                  'beta', beta)
         # all transmission to hosts happens in there population to begin with.
-        update_params_with_to_from_cluster_param(parameters,
-                                                 self.host_not_positive, self.model.clusters,
-                                                 'N',
-                                                 self.host_population)  # starts off just Qatari population
+        update_params_with_cluster_param(parameters,
+                                         self.host_not_positive,
+                                         'N',
+                                         self.host_population)  # starts off just Qatari population
         
         
         
@@ -277,9 +269,9 @@ class SportMatchMGESimulation:
                                                  self.vistors_not_positive, self.model.clusters,
                                                  'beta', 0)
         # all vistor population are half the number of visitor tickets to begin with
-        update_params_with_to_from_cluster_param(parameters,
-                                                 self.vistors_not_positive, self.model.clusters,
-                                                 'N', round(visitor_tickets/2))
+        update_params_with_cluster_param(parameters,
+                                         self.vistors_not_positive,
+                                         'N', round(visitor_tickets/2))
         
         # visitors arrive transmission terms changes
         self.event_queue.change_event_value('visitor arrival beta changes', beta)
