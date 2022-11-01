@@ -33,19 +33,7 @@ metapoplulation_info = json.loads(metapoplulation_info)
 
 class SportMatchMGESimulation:
     def __init__(self,
-                 host_population, host_cases_per_million,
-                 total_hosts_vaccinated, hosts_effectively_vaccinated,
-                 stadium_capacity,
-                 team_A_cases_per_million, team_B_cases_per_million,
                  fixed_parameters={}):
-        self.host_population = host_population
-        self.host_cases_per_million = host_cases_per_million
-        self.hosts_unvaccinated = host_population - total_hosts_vaccinated
-        self.hosts_waned_vaccinated = total_hosts_vaccinated - hosts_effectively_vaccinated
-        self.hosts_effectively_vaccinated = hosts_effectively_vaccinated
-        self.stadium_capacity = stadium_capacity
-        self.team_A_cases_per_million = team_A_cases_per_million
-        self.team_B_cases_per_million = team_B_cases_per_million
         self.model = MassGatheringModel(metapoplulation_info)
         self.fixed_parameters = fixed_parameters
         self._setup_seeder()
@@ -205,10 +193,10 @@ class SportMatchMGESimulation:
         self.event_queue.reset_event_queue()
         parameters = {**self.fixed_parameters, **sampled_parameters}
         # Setup population
-        host_tickets = round(self.stadium_capacity * parameters['proportion host tickets'])
-        visitor_tickets = self.stadium_capacity - host_tickets
-        host_and_visitor_population = self.host_population + visitor_tickets
-        staff = round(self.stadium_capacity*parameters['staff per ticket'])
+        host_tickets = round(parameters['stadium capacity'] * parameters['proportion host tickets'])
+        visitor_tickets = parameters['stadium capacity'] - host_tickets
+        host_and_visitor_population = parameters['host population'] + visitor_tickets
+        staff = round(parameters['stadium capacity']*parameters['staff per ticket'])
 
         # Setup starting transmission and changes in transmission
         beta_derive_func_args = list(inspect.signature(MGE_beta_no_vaccine_1_cluster).parameters.keys())
@@ -256,7 +244,7 @@ class SportMatchMGESimulation:
         update_params_with_cluster_param(parameters,
                                          self.host_not_positive,
                                          'N',
-                                         self.host_population)  # starts off just Qatari population
+                                         parameters['host population'])  # starts off just Qatari population
         
         
         
@@ -296,9 +284,13 @@ class SportMatchMGESimulation:
 
         # setting up populations
         # Setting up host population
-        host_sub_population = gen_host_sub_popultion(self.host_population, host_tickets, staff,
-                                                     self.hosts_unvaccinated, self.hosts_effectively_vaccinated, self.hosts_waned_vaccinated,
-                                                     self.host_cases_per_million, parameters['host infections per case'])
+        hosts_unvaccinated = parameters['host population'] - parameters['total hosts vaccinated']
+        hosts_waned_vaccinated = parameters['total hosts vaccinated'] - parameters['hosts effectively vaccinated']
+        host_sub_population = gen_host_sub_popultion(parameters['host population'], host_tickets, staff,
+                                                     hosts_unvaccinated, 
+                                                     parameters['hosts effectively vaccinated'],
+                                                     hosts_waned_vaccinated,
+                                                     parameters['host cases per million'], parameters['host infections per case'])
 
         # Sorting visitor populations
         team_A_vacc_status_proportion = {'unvaccinated': 0,

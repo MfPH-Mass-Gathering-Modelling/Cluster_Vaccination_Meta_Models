@@ -14,14 +14,23 @@ from tqdm.auto import tqdm
 import pingouin as pg
 
 
-def format_sample(parameters_df, LH_samples):
-    if any(~parameters_df['Distribution'].isin(['boolean','uniform'])):
-        raise ValueError('Only Boolean and Uniform distributions currently supported.')
+def format_sample(parameters_df, LH_samples, other_samples_to_repeat=None):
+    # if any(~parameters_df['Distribution'].isin(['boolean','uniform'])):
+    #     raise ValueError('Only Boolean and Uniform distributions currently supported.')
     samples_df = pd.DataFrame(qmc.scale(LH_samples, parameters_df['Lower Bound'], parameters_df['Upper Bound']),
                               columns=parameters_df['Parameter'])
-    convert_to_bool = parameters_df.Parameter[parameters_df['Distribution'] == 'boolean']
-    for parameter in convert_to_bool:
-        samples_df[parameter] = samples_df[parameter] >= 0.5
+    if other_samples_to_repeat is not None:
+        multiple = len(samples_df)/len(other_samples_to_repeat)
+        if not multiple.is_integer():
+            raise ValueError('LHS sample size devided by length of other_samples_to_repeat must be expressable as an interger value.')
+        multiple = int(multiple)
+        repeated_samples = pd.concat([other_samples_to_repeat] * multiple, ignore_index=True)
+        samples_df = pd.concat([samples_df, repeated_samples], axis=1, ignore_index=True)
+
+
+    # convert_to_bool = parameters_df.Parameter[parameters_df['Distribution'] == 'boolean']
+    # for parameter in convert_to_bool:
+    #     samples_df[parameter] = samples_df[parameter] >= 0.5
     return samples_df
 
 

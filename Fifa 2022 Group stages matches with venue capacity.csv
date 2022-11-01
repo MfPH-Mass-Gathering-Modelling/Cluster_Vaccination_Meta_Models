@@ -1,0 +1,49 @@
+Date,Group,Team_A,Team_B,Stadium,Capacity
+2022-11-20,A,Qatar,Ecuador,Al Bayt Stadium,60000
+2022-11-21,B,England,Iran,Khalifa International Stadium,40000
+2022-11-21,A,Senegal,Netherlands,Al Thumama Stadium,40000
+2022-11-21,B,United States,Wales,Ahmad Bin Ali Stadium,40000
+2022-11-22,C,Argentina,Saudi Arabia,Lusail Stadium,80000
+2022-11-22,D,Denmark,Tunisia,Education City Stadium,40000
+2022-11-22,C,Mexico,Poland,Stadium 974,40000
+2022-11-22,D,France,Australia,Al Janoub Stadium,40000
+2022-11-23,F,Morocco,Croatia,Al Bayt Stadium,60000
+2022-11-23,E,Germany,Japan,Khalifa International Stadium,40000
+2022-11-23,E,Spain,Costa Rica,Al Thumama Stadium,40000
+2022-11-23,F,Belgium,Canada,Ahmad Bin Ali Stadium,40000
+2022-11-24,G,Switzerland,Cameroon,Al Janoub Stadium,40000
+2022-11-24,H,Uruguay,South Korea,Education City Stadium,40000
+2022-11-24,H,Portugal,Ghana,Stadium 974,40000
+2022-11-24,G,Brazil,Serbia,Lusail Stadium,80000
+2022-11-25,B,Wales,Iran,Ahmad Bin Ali Stadium,40000
+2022-11-25,A,Qatar,Senegal,Al Thumama Stadium,40000
+2022-11-25,A,Netherlands,Ecuador,Khalifa International Stadium,40000
+2022-11-25,B,England,United States,Al Bayt Stadium,60000
+2022-11-26,D,Tunisia,Australia,Al Janoub Stadium,40000
+2022-11-26,C,Poland,Saudi Arabia,Education City Stadium,40000
+2022-11-26,D,France,Denmark,Stadium 974,40000
+2022-11-26,C,Argentina,Mexico,Lusail Stadium,80000
+2022-11-27,E,Japan,Costa Rica,Ahmad Bin Ali Stadium,40000
+2022-11-27,F,Belgium,Morocco,Al Thumama Stadium,40000
+2022-11-27,F,Croatia,Canada,Khalifa International Stadium,40000
+2022-11-27,E,Spain,Germany,Al Bayt Stadium,60000
+2022-11-28,G,Cameroon,Serbia,Al Janoub Stadium,40000
+2022-11-28,H,South Korea,Ghana,Education City Stadium,40000
+2022-11-28,G,Brazil,Switzerland,Stadium 974,40000
+2022-11-28,H,Portugal,Uruguay,Lusail Stadium,80000
+2022-11-29,A,Ecuador,Senegal,Khalifa International Stadium,40000
+2022-11-29,A,Netherlands,Qatar,Al Bayt Stadium,60000
+2022-11-29,B,Wales,England,Ahmad Bin Ali Stadium,40000
+2022-11-29,B,Iran,United States,Al Thumama Stadium,40000
+2022-11-30,D,Australia,Denmark,Al Janoub Stadium,40000
+2022-11-30,D,Tunisia,France,Education City Stadium,40000
+2022-11-30,C,Poland,Argentina,Stadium 974,40000
+2022-11-30,C,Saudi Arabia,Mexico,Lusail Stadium,80000
+2022-12-01,F,Croatia,Belgium,Ahmad Bin Ali Stadium,40000
+2022-12-01,F,Canada,Morocco,Al Thumama Stadium,40000
+2022-12-01,E,Japan,Spain,Khalifa International Stadium,40000
+2022-12-01,E,Costa Rica,Germany,Al Bayt Stadium,60000
+2022-12-02,H,Ghana,Uruguay,Al Janoub Stadium,40000
+2022-12-02,H,South Korea,Portugal,Education City Stadium,40000
+2022-12-02,G,Serbia,Switzerland,Stadium 974,40000
+2022-12-02,G,Cameroon,Brazil,Lusail Stadium,80000
