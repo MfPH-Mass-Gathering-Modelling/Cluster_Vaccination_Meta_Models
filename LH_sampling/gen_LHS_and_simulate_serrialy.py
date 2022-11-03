@@ -43,11 +43,11 @@ def calucate_PRCC(sample_df, parameter, output, covariables):
                                       method='spearman')
     param_rank_pcor.rename(index={'spearman': parameter + ' on ' + output}, inplace=True)
     return param_rank_pcor
-def LHS_PRCC_serial(parameters_df, sample_size, model_run_method, LHS_obj=None, y0=None):
+def LHS_PRCC_serial(parameters_df, sample_size, model_run_method, LHS_obj=None, y0=None, other_samples_to_repeat=None):
     if LHS_obj is None:
         LHS_obj = qmc.LatinHypercube(len(parameters_df))
     LH_sample = LHS_obj.random(sample_size)
-    sample_df = format_sample(parameters_df, LH_sample)
+    sample_df = format_sample(parameters_df, LH_sample, other_samples_to_repeat)
     focused_results_records = []
     samples = sample_df.to_dict('records')
     for sample in tqdm(samples, desc='Simulating LH Sample', position=1, leave=False, colour='green'):

@@ -23,7 +23,7 @@ class MassGatheringModel(BaseScipyClusterVacModel):
     symptomatic_states = ['M_I', 'F_I', 'M_D', 'F_D', 'M_H', 'F_H']
     isolating_states = ['M_D', 'M_H', 'F_D']
     non_transmission_universal_params = ['epsilon_1', 'epsilon_2', 'epsilon_3', 'epsilon_H',
-                                         'p_s', 'p_h', 'p_d',
+                                         'p_s', 'p_h_s', 'p_d',
                                          'gamma_A_1', 'gamma_A_2',
                                          'gamma_I_1', 'gamma_I_2',
                                          'gamma_H',
@@ -64,7 +64,7 @@ class MassGatheringModel(BaseScipyClusterVacModel):
 
                 # progression to mid-infection
                 prog_symptoms = parameters['epsilon_3'] * y[states_index['P_I']]
-                p_h_v = parameters['p_h'] * (1 - parameters[ve_hospitalisation])
+                p_h_v = parameters['p_h_s'] * (1 - parameters[ve_hospitalisation])
                 prog_hospital_path = p_h_v*prog_symptoms
                 prog_detected_path = (1-p_h_v)*parameters['p_d']*prog_symptoms
                 prog_symptomatic_undetected_path = (1-p_h_v)*(1-parameters['p_d'])*prog_symptoms

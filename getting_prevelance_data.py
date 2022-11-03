@@ -2,7 +2,7 @@
 Creation:
     Author: Martin Grunnill
     Date: 2022-11-01
-Description: Getting reported case data for world cup teams.
+Description: Getting prevelance data for world cup teams.
     
 """
 import copy
@@ -11,10 +11,12 @@ import datetime
 
 schedule_df = pd.read_csv('Fifa 2022 Group stages matches with venue capacity.csv')
 covid_data = pd.read_csv('https://covid.ourworldindata.org/data/owid-covid-data.csv')
+population_df = pd.read_csv('Population etimates world bank.csv',header=2, index_col='Country Name') # downloaded from https://data.worldbank.org/indicator/SP.POP.TOTL https://api.worldbank.org/v2/en/indicator/SP.POP.TOTL?downloadformat=csv
+
 # need to change covid_data to datetime type
 covid_data.date = pd.to_datetime(covid_data.date)
 
-date_to = datetime.datetime(2022, 11, 1)
+date_to = datetime.datetime(2022, 10, 31)
 covid_data = covid_data[covid_data.date<=date_to]
 
 #%%
@@ -35,7 +37,7 @@ len(proxies)==len(selected_proxies)
 # remove missing data
 covid_data.new_cases_smoothed_per_million = covid_data.new_cases_smoothed_per_million.replace({0:None})
 covid_data = covid_data[pd.notnull(covid_data.new_cases_smoothed_per_million)]
-new_cases_smoothed_per_million_records = []
+prevelance_records = []
 for country in countries:
     if country in ['England', 'Wales']:
         proxy = 'United Kingdom'
@@ -46,17 +48,24 @@ for country in countries:
     # latest date for which we have information
     latest_date = location_data.date.max()
     latest_date_data = location_data[location_data.date==latest_date]
+    cases_smoothed = latest_date_data.new_cases_smoothed.iloc[0]
+    if proxy=='South Korea':
+        population = population_df.loc['Korea, Rep.', '2021']
+    elif proxy == 'Iran':
+        population = population_df.loc['Iran, Islamic Rep.', '2021']
+    else:
+        population = population_df.loc[proxy,'2021']
 
     entry = {'country': country,
              'proxy': proxy,
              'date': latest_date,
-             'new_cases_smoothed_per_million': latest_date_data.new_cases_smoothed_per_million.iloc[0]}
+             'prevalence': cases_smoothed/population,
+             }
 
-    new_cases_smoothed_per_million_records.append(entry)
+    prevelance_records.append(entry)
 
-new_cases_smoothed_per_million_df = pd.DataFrame(new_cases_smoothed_per_million_records)
-new_cases_smoothed_per_million_df.to_csv('Smoothed Cases per million.csv',
-                                         index=False)
+prevelance_df = pd.DataFrame(prevelance_records)
+prevelance_df.to_csv('Prevalence data.csv', index=False)
 # #%% Adding data on infection to detection ratio
 #
 # # Getting data frame
