@@ -26,7 +26,7 @@ def LHS_and_PRCC_parallel(parameters_df,
     if LHS_obj is None:
         LHS_obj = qmc.LatinHypercube(len(parameters_df))
     LH_sample = LHS_obj.random(sample_size)
-    sample_df = format_sample(parameters_df, LH_sample, other_samples_to_repeat)
+    sample_df, parameters_sampled = format_sample(parameters_df, LH_sample, other_samples_to_repeat)
     samples = sample_df.to_dict('records')
     with tqdm(total=sample_size,
               desc='Simulating LH Sample',
@@ -45,13 +45,13 @@ def LHS_and_PRCC_parallel(parameters_df,
     focused_results_df = pd.DataFrame.from_records(focused_results_records)
     sample_df = pd.concat([sample_df, focused_results_df], axis=1)
     prcc_args = []
-    for parameter in parameters_df['Parameter']:
+    for parameter in parameters_sampled:
         covariables = [item
-                       for item in parameters_df['Parameter']
+                       for item in parameters_sampled
                        if item != parameter]
         for output in focused_results_df.columns:
             prcc_args.append((parameter, output, covariables))
-    with concurrent.futures.ProcessPoolExecutor() as executor:  # set up paralisation for PRCC simulations
+    with concurrent.futures.ProcessPoolExecutor() as executor:  # set up paralisation for PRCC calculations
         calculations = [executor.submit(calucate_PRCC, sample_df, parameter, output, covariables)
                         for parameter, output, covariables in prcc_args]
         prccs = []
@@ -70,9 +70,9 @@ if __name__ == '__main__':
     other_samples_to_repeat = load_repeated_sample()
 
     sport_match_sim = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
-    sample_size = 100
+    sample_size = 2*len(other_samples_to_repeat)
     LHS_and_PRCC_parallel(parameters_df=parameters_df,
                           sample_size=sample_size,
                           model_run_method=sport_match_sim.run_simulation,
                           results_csv='PRCCs LH sample size '+str(sample_size)+'.csv',
-                          other_samples_to_repeat =other_samples_to_repeat)
+                          other_samples_to_repeat=other_samples_to_repeat)

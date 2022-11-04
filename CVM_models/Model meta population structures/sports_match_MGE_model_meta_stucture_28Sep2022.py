@@ -74,7 +74,7 @@ def gen_clusters_vaccine_and_test_structures(clusters):
         for vaccine_group in vaccine_groups:
             entry = {**to_and_from_cluster,
                      'from_vaccine_group': vaccine_group, 'to_vaccine_group': vaccine_group,
-                     'parameter': 'omega_G', 'states': PCR_delay}
+                     'parameter': 'omega', 'states': PCR_delay}
             group_info.append(entry)
             
         to_and_from_cluster = {'from_cluster': PCR_positive, 'to_cluster': cluster}

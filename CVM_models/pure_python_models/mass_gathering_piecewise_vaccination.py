@@ -69,7 +69,7 @@ class MassGatheringModel(BaseScipyClusterVacModel):
                 prog_detected_path = (1-p_h_v)*parameters['p_d']*prog_symptoms
                 prog_symptomatic_undetected_path = (1-p_h_v)*(1-parameters['p_d'])*prog_symptoms
 
-                prog_asymptomatic_path = parameters['epsilon_3'] * y[states_index['P_A']]
+                prog_mid_asymptomatic_stage = parameters['epsilon_3'] * y[states_index['P_A']]
 
                 #Late infection
                 prog_late_asymptomatic_stage = parameters['gamma_A_1'] * y[states_index['M_A']]
@@ -92,8 +92,8 @@ class MassGatheringModel(BaseScipyClusterVacModel):
                 y_deltas[states_index['G_I']] += prog_symptomatic_path - prog_LFD_sensitive_symptomatic_path
                 y_deltas[states_index['G_A']] += prog_asymptomatic_path - prog_LFD_sensitive_asymptomatic_path
                 y_deltas[states_index['P_I']] += prog_LFD_sensitive_symptomatic_path - prog_symptoms
-                y_deltas[states_index['P_A']] += prog_LFD_sensitive_asymptomatic_path - prog_asymptomatic_path
-                y_deltas[states_index['M_A']] += prog_asymptomatic_path-prog_late_asymptomatic_stage
+                y_deltas[states_index['P_A']] += prog_LFD_sensitive_asymptomatic_path - prog_mid_asymptomatic_stage
+                y_deltas[states_index['M_A']] += prog_mid_asymptomatic_stage-prog_late_asymptomatic_stage
                 y_deltas[states_index['M_I']] += prog_symptomatic_undetected_path-prog_late_symptomatic_stage
                 y_deltas[states_index['M_D']] += prog_detected_path - prog_late_detected_stage
                 y_deltas[states_index['M_H']] += prog_hospital_path - hospitalisation

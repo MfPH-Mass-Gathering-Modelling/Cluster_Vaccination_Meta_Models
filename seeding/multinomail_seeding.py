@@ -26,11 +26,6 @@ class InfectionBranch:
         self.outflows = outflows
 
     def calculate_weighting(self, proportion, parameters):
-        prob_error = 'proportion argument should be a number <=1 and >=0.'
-        if not isinstance(proportion, Number):
-            raise TypeError(prob_error)
-        if proportion > 1 or proportion <0:
-            raise ValueError(prob_error)
         parameters_error = ('parameters argument should be a dictionary,' +
                             ' with keys being strings and values being numbers.')
         if not isinstance(parameters, dict):
@@ -61,10 +56,6 @@ class MultnomialSeeder:
             self.branches[branch_name] = InfectionBranch(branch_name, outflows)
 
     def calculate_weighting(self, proportions, parameters):
-        proportions_total = sum(proportions.values())
-        if not math.isclose(1, proportions_total, abs_tol=0.000001):
-            raise ValueError('The sum of dictionary values in proportions should equal 1, it is equal to ' +
-                             str(proportions_total)+'.')
         for index, (branch_name, branch) in enumerate(self.branches.items()):
             branch_weighting = branch.calculate_weighting(proportions[branch_name],
                                                           parameters)
@@ -84,6 +75,16 @@ class MultnomialSeeder:
     def seed_infections(self, n, proportions, parameters, size=1):
         if not(isinstance(size,int)) or size <= 0:
             raise TypeError('size must be an int >0.')
+        prob_error = ', all proportion argument should be a number <=1 and >=0.'
+        for key, value in proportions.items():
+            if not isinstance(value, Number):
+                raise TypeError(key+' not a Number type'+ prob_error)
+            if value > 1 or value < 0:
+                raise ValueError(key+' is of value '+ str(value) + prob_error)
+        proportions_total = sum(proportions.values())
+        if not math.isclose(1, proportions_total, abs_tol=0.000001):
+            raise ValueError('The sum of dictionary values in proportions should equal 1, it is equal to ' +
+                             str(proportions_total)+'.')
         weighting = self.calculate_weighting(proportions, parameters)
         pvals = list(weighting.values())
         states = list(weighting.keys())
