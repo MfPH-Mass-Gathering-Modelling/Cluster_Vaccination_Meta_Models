@@ -7,9 +7,9 @@ Description:
 """
 import pandas as pd
 import os
-import shutil
 # import Quasi-Monte Carlo submodule
 from scipy.stats import qmc
+import timeit
 from simulations.sports_match_sim import SportMatchMGESimulation
 from tqdm import tqdm
 from LH_sampling.LHS_and_PRCC_parallel import LHS_and_PRCC_parallel
@@ -52,12 +52,19 @@ def determine_LH_sample_size(parameters_df,
 
     while attempts_made < attempts_to_make and not aim_reached:
         prcc_measures = []
+        run_times = []
         save_prcc_stats_file = (save_dir +
                                 '/PRCC descriptive stats at sample size ' +
+                                str(sample_size) + '.csv')
+        run_time_stats_file = (save_dir +
+                                '/Run time descriptive stats at sample size ' +
                                 str(sample_size) + '.csv')
         temporary_folder = (save_dir +
                             '/PRCC results from LH sample size ' +
                             str(sample_size))
+        run_time_record_file = (save_dir +
+                                '/Run times at sample size ' +
+                                str(sample_size) + '.csv')
         if not os.path.exists(temporary_folder):
             os.makedirs(temporary_folder)
         if not os.path.isfile(save_prcc_stats_file):
@@ -66,8 +73,11 @@ def determine_LH_sample_size(parameters_df,
                                    desc='LHS resample sample size of '+str(sample_size)):
                 temporary_results_file = temporary_folder + '/PRCC results from run ' + str(repeat_num)+'.csv'
                 if os.path.exists(temporary_results_file):
-                    prcc_measure_enty = pd.read_csv(temporary_results_file)
+                    prcc_measure_enty = pd.read_csv(temporary_results_file, index_col=0)
+                    run_times_df = pd.read_csv(run_time_record_file, index_col=0)
+                    run_times = run_times_df.Times.to_list()
                 else:
+                    start = timeit.default_timer()
                     if other_samples_to_repeat is not None:
                         prcc_measure_enty = LHS_PRCC_method(parameters_df, sample_size, model_run_method,
                                                             LHS_obj=LHS_obj, y0=y0,
@@ -76,14 +86,19 @@ def determine_LH_sample_size(parameters_df,
                     else:
                         prcc_measure_enty = LHS_PRCC_method(parameters_df, sample_size, model_run_method,
                                                             LHS_obj=LHS_obj, y0=y0)
-                    prcc_measure_enty.to_csv(temporary_results_file, index_col=0)
+                    end = timeit.default_timer()
+                    run_times.append(end - start)
+                    run_times_df = pd.DataFrame({'Times': run_times})
+                    run_times_df.to_csv(run_time_record_file)
+                    prcc_measure_enty.to_csv(temporary_results_file)
                 prcc_measures.append(prcc_measure_enty['r'])
             prcc_measures_df = pd.concat(prcc_measures, axis=1)
             prcc_measures_df.columns = range_of_repeats
             prcc_measures_df = prcc_measures_df.transpose(copy=True)
             prcc_decriptive_stats = prcc_measures_df.describe()
             prcc_decriptive_stats.to_csv(save_prcc_stats_file)
-
+            times_decriptive_stats = run_times_df.Times.describe()
+            times_decriptive_stats.to_csv(run_time_stats_file)
         else:
             prcc_decriptive_stats = pd.read_csv(save_prcc_stats_file, index_col=0)
 
@@ -93,7 +108,7 @@ def determine_LH_sample_size(parameters_df,
                 sample_size += n_increase_addition
             elif n_increase_multiple is not None:
                 sample_size *= n_increase_multiple
-            shutil.rmtree(temporary_folder)
+
         else:
            aim_reached = True
         attempts_made += 1
@@ -104,22 +119,22 @@ if __name__ == '__main__':
     parameters_df, fixed_parameters = load_parameters()
     other_samples_to_repeat = load_repeated_sample()
     save_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models')
-    save_dir = save_dir +'/determining LH sample size'
+    save_dir = save_dir +'/Determining Adaquate LH Size'
 
 
-    sport_match_sim = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
+    model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
+    model_run_method = model_or_simulation_obj.run_simulation
 
-
-    repeats_per_n = 30
-    start_n = 100*len(other_samples_to_repeat)
-    std_aim = 0.001
-    model_run_method = sport_match_sim.run_simulation
+    repeats_per_n = 10
+    start_n = 125*len(other_samples_to_repeat)
+    std_aim = 0.01
+    n_increase_addition = 25*len(other_samples_to_repeat)
     determine_LH_sample_size(parameters_df=parameters_df,
                              model_run_method=model_run_method,
                              start_n=start_n,
                              repeats_per_n=repeats_per_n,
                              std_aim=std_aim,
                              LHS_PRCC_method=LHS_and_PRCC_parallel,
-                             n_increase_addition = start_n,
+                             n_increase_addition=n_increase_addition,
                              save_dir=save_dir,
                              other_samples_to_repeat =other_samples_to_repeat)

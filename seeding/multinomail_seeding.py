@@ -35,7 +35,7 @@ class InfectionBranch:
         if any(not isinstance(key,str) for key in parameters.keys()):
             raise TypeError(parameters_error)
 
-        return {state: proportion*(parameters[outflow]/1)
+        return {state: proportion*(parameters[outflow]**-1)
                 for state, outflow in self.outflows.items()}
 
 

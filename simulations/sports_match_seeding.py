@@ -2,7 +2,7 @@
 Creation:
     Author: Martin Grunnill
     Date: 2022-09-27
-Description: Set up an object for running world cup match MGE modelling simulations.
+Description: Set up an object for running world cup match MGE  seeding for simulations.
     
 """
 import json
@@ -31,7 +31,7 @@ with open(structures_dir + "Sports match MGE.json", "r") as json_file:
 metapoplulation_info = json.loads(metapoplulation_info)
 
 
-class SportMatchMGESimulation:
+class SportMatchMGESeeding:
     def __init__(self,
                  fixed_parameters={}):
         self.model = MassGatheringModel(metapoplulation_info)
@@ -324,12 +324,10 @@ class SportMatchMGESimulation:
 
         # Seeding infections
         all_sub_pops = {**host_sub_population, **visitor_sub_pop}
-        y0 = np.zeros(self.model.num_state)
         state_index = self.model.state_index
+        seeds_by_state = {state: 0 for state in self.model.infected_states}
         for cluster, vaccine_group_dict in all_sub_pops.items():
             for vaccine_group, s_vs_infections in vaccine_group_dict.items():
-                state_index_sub_pop = state_index[cluster][vaccine_group]
-                y0[state_index_sub_pop['S']] = s_vs_infections['S']
                 p_s_v = parameters['p_s'] * (1 - parameters['s_' + vaccine_group])
                 p_h_v = parameters['p_h_s'] * (1 - parameters['h_' + vaccine_group])
                 asymptomatic_prob = 1 - p_s_v
@@ -345,38 +343,12 @@ class SportMatchMGESimulation:
                 seeds = self.seeder.seed_infections(s_vs_infections['infections'],
                                                     infection_branch_proportions,
                                                     params_for_seeding)
-                for state, population in seeds.items():
-                    y0[state_index_sub_pop[state]] = population
+                for state, seed in seeds.items():
+                    seeds_by_state[state] += seed
 
-        # Runninng mg_model
-        parameters_needed_for_model = {key: value for key, value in parameters.items()
-                                       if key in self.model.all_parameters}
-        self.model.parameters = parameters_needed_for_model
-        solution, transfers_df = self.event_queue.run_simulation(model_object=self.model,
-                                                                 run_attribute='integrate',
-                                                                 parameters=parameters_needed_for_model,
-                                                                 parameters_attribute='parameters',
-                                                                 y0=y0,
-                                                                 end_time=self.end_time, start_time=self.start_time,
-                                                                 simulation_step=self.time_step)
-        infection_prevelances = solution[:, self.model.infected_states_index_list]
-        all_infection_prevelances = infection_prevelances.sum(axis=1)
-        peak_infected = all_infection_prevelances.max()
-        total_infections = solution[-1, -1]
-        hospital_prevelances = solution[:, self.model.hospitalised_states_index_list]
-        all_hospitalisation_prevelances = hospital_prevelances.sum(axis=1)
-        peak_hospitalised = all_hospitalisation_prevelances.max()
-        total_hospitalisations = solution[-1, -2]
-        focused_ouputs = {'peak infected': peak_infected,
-                          'total infections': total_infections,
-                          'peak hospitalised': peak_hospitalised,
-                          'total hospitalisations': total_hospitalisations}
-        if return_full_results:
-            sol_df = results_array_to_df(solution, self.model.state_index,
-                                         start_time=self.start_time, simulation_step=self.time_step, end_time=self.end_time)
-            return focused_ouputs, sol_df, transfers_df
-        else:
-            return focused_ouputs
+        total_seeded = sum(seeds_by_state.values())
+        proportion_seeds_by_state = {state: seed/total_seeded for state, seed in seeds_by_state.items()}
+        return proportion_seeds_by_state
 
 
 

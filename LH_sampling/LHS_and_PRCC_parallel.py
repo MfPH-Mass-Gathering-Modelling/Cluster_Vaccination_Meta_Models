@@ -69,10 +69,11 @@ if __name__ == '__main__':
     parameters_df, fixed_parameters = load_parameters()
     other_samples_to_repeat = load_repeated_sample()
 
-    sport_match_sim = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
+    model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
+    model_run_method = model_or_simulation_obj.run_simulation
     sample_size = 2*len(other_samples_to_repeat)
     LHS_and_PRCC_parallel(parameters_df=parameters_df,
                           sample_size=sample_size,
-                          model_run_method=sport_match_sim.run_simulation,
+                          model_run_method=model_run_method,
                           results_csv='PRCCs LH sample size '+str(sample_size)+'.csv',
                           other_samples_to_repeat=other_samples_to_repeat)
