@@ -137,6 +137,16 @@ class SportMatchMGESimulation:
                                                'times': 5.5,
                                                'type': 'transfer'}
 
+        # Those about to be hospitalised or Hospitalised should be removed before arriving in host nation.
+        visitor_pre_host_and_hosp = []
+        for cluster in ['team_A_supporters','team_B_supporters']:
+            vaccine_group_dict = self.model.state_index[cluster]
+            for states_group_index in vaccine_group_dict.values():
+                visitor_pre_host_and_hosp += [states_group_index[state] for state in ['M_H','F_H']]
+        event_info_dict['Removing pre-hospitalised and hospitalised visitors'] = {'from_index': visitor_pre_host_and_hosp,
+                                                                                  'proportion': 1,
+                                                                                  'times': 0,
+                                                                                  'type': 'transfer'}
         pop_visitors_arrive = list_cluster_param('N',
                                                  clusters=self.host_not_positive + self.vistors_not_positive)
         all_clusters_index = self.model.get_clusters_indexes(self.model.clusters)
@@ -150,6 +160,12 @@ class SportMatchMGESimulation:
         event_info_dict['visitor arrival beta changes'] = {'type': 'change parameter',
                                                            'changing_parameters': beta_visitors_arrive,
                                                            'times': 0}
+        event_info_dict['Restart Cumulative counts'] = {'from_index': [-1,-2],
+                                                        'proportion': 1,
+                                                        'times': 0,
+                                                        'type': 'transfer'}
+
+
 
         pop_match_day_begins = list_cluster_param('N',
                                                   clusters=self.match_attendees_not_positive)
@@ -197,6 +213,7 @@ class SportMatchMGESimulation:
         parameters['gamma_A_2'] = gamma_A_1
         parameters['p_h_s'] = parameters['p_h']/parameters['p_s']
         parameters['h_effective'] = 1 - ((1 - parameters['VE_{hos}']) / (1 - parameters['l_effective']))
+        parameters['h_waned'] = 1 - ((1 - parameters['VW_{hos}']) / (1 - parameters['l_waned']))
 
     def run_simulation(self, sampled_parameters, return_full_results=False):
         # reset any changes in event queue caused by previously running self.run_simulation
@@ -359,11 +376,13 @@ class SportMatchMGESimulation:
                                                                  y0=y0,
                                                                  end_time=self.end_time, start_time=self.start_time,
                                                                  simulation_step=self.time_step)
-        infection_prevelances = solution[:, self.model.infected_states_index_list]
+        run_time = np.arange(self.start_time,self.end_time,self.time_step)
+        MGE_run_time_start = np.where(run_time==0)[0][0]
+        infection_prevelances = solution[MGE_run_time_start:, self.model.infected_states_index_list]
         all_infection_prevelances = infection_prevelances.sum(axis=1)
         peak_infected = all_infection_prevelances.max()
         total_infections = solution[-1, -1]
-        hospital_prevelances = solution[:, self.model.hospitalised_states_index_list]
+        hospital_prevelances = solution[MGE_run_time_start:, self.model.hospitalised_states_index_list]
         all_hospitalisation_prevelances = hospital_prevelances.sum(axis=1)
         peak_hospitalised = all_hospitalisation_prevelances.max()
         total_hospitalisations = solution[-1, -2]
