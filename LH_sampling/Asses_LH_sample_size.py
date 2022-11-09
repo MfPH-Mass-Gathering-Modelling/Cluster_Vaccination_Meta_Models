@@ -120,13 +120,16 @@ if __name__ == '__main__':
     other_samples_to_repeat = load_repeated_sample()
     save_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models')
     save_dir = save_dir +'/Determining Adaquate LH Size'
-
+    # no tests
+    fixed_parameters['Pre-travel test'] = False
+    fixed_parameters['Pre-match test'] = False
+    fixed_parameters['Post-match test'] = False
 
     model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
     model_run_method = model_or_simulation_obj.run_simulation
 
-    repeats_per_n = 10
-    start_n = 25*len(other_samples_to_repeat)
+    repeats_per_n = 20
+    start_n = 200*len(other_samples_to_repeat)
     std_aim = 0.01
     n_increase_addition = 25*len(other_samples_to_repeat)
     determine_LH_sample_size(parameters_df=parameters_df,

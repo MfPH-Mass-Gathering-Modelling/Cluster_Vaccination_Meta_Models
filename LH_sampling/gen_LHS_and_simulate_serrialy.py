@@ -79,6 +79,11 @@ def LHS_PRCC_serial(parameters_df, sample_size, model_run_method,
 if __name__ == '__main__':
     parameters_df, fixed_parameters = load_parameters()
     other_samples_to_repeat = load_repeated_sample()
+    # no tests
+    fixed_parameters['Pre-travel test'] = False
+    fixed_parameters['Pre-match test'] = False
+    fixed_parameters['Post-match test'] = False
+
 
     model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
     model_run_method = model_or_simulation_obj.run_simulation

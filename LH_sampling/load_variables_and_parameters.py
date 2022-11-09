@@ -13,10 +13,6 @@ def load_parameters(file='Parameters values in LHS Sports Match Sims.csv',
     fixed_params = parameters_df['Fixed Value'].dropna()
     fixed_params = fixed_params.to_dict()
     parameters_df = parameters_df[parameters_df['Fixed Value'].isnull()]
-    # no tests
-    fixed_params['Pre-travel test'] = False
-    fixed_params['Pre-match test'] = False
-    fixed_params['Post-match test'] = False
     # no waning immunity or flows of people between clusters and vaccination groups.
     parameters_held_at_0 =  {param: 0
                              for param in

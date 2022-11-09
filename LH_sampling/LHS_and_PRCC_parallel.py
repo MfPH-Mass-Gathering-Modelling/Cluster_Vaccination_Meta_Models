@@ -16,34 +16,23 @@ from LH_sampling.gen_LHS_and_simulate_serrialy import format_sample, calucate_PR
 from LH_sampling.load_variables_and_parameters import load_parameters, load_repeated_sample
 
 
-def LHS_and_PRCC_parallel(parameters_df,
-                          sample_size,
-                          model_run_method,
-                          results_csv = None,
-                          LHS_obj=None,
-                          y0=None,
-                          other_samples_to_repeat=None):
-    if LHS_obj is None:
-        LHS_obj = qmc.LatinHypercube(len(parameters_df))
-    LH_sample = LHS_obj.random(sample_size)
-    sample_df, parameters_sampled = format_sample(parameters_df, LH_sample, other_samples_to_repeat)
+def run_samples_in_parrallell(sample_df, model_run_method, **kwargs):
     samples = sample_df.to_dict('records')
-    with tqdm(total=sample_size,
+    with tqdm(total=len(sample_df),
               desc='Simulating LH Sample',
               position=1,
               leave=False,
               colour='green') as pbar: # add a progress bar.
         with concurrent.futures.ProcessPoolExecutor() as executor: # set up paralisation for simulations
-            if y0 is None:
-                simlations = [executor.submit(model_run_method, sample) for sample in samples]
-            else:
-                simlations = [executor.submit(model_run_method, sample, y0=y0) for sample in samples]
+            simlations = [executor.submit(model_run_method, sample, **kwargs) for sample in samples]
             focused_results_records = []
             for simlation in concurrent.futures.as_completed(simlations):
                 focused_results_records.append(simlation.result())
                 pbar.update(1)
     focused_results_df = pd.DataFrame.from_records(focused_results_records)
-    sample_df = pd.concat([sample_df, focused_results_df], axis=1)
+    return focused_results_df
+
+def PRCC_parallel(parameters_sampled, focused_results_df,sample_df):
     prcc_args = []
     for parameter in parameters_sampled:
         covariables = [item
@@ -60,6 +49,21 @@ def LHS_and_PRCC_parallel(parameters_df,
 
     prccs = pd.concat(prccs)
     prccs.sort_index(inplace=True)
+    return prccs
+def LHS_and_PRCC_parallel(parameters_df,
+                          sample_size,
+                          model_run_method,
+                          results_csv = None,
+                          LHS_obj=None,
+                          y0=None,
+                          other_samples_to_repeat=None):
+    if LHS_obj is None:
+        LHS_obj = qmc.LatinHypercube(len(parameters_df))
+    LH_sample = LHS_obj.random(sample_size)
+    sample_df, parameters_sampled = format_sample(parameters_df, LH_sample, other_samples_to_repeat)
+    focused_results_df = run_samples_in_parrallell(sample_df, model_run_method)
+    sample_df = pd.concat([sample_df, focused_results_df], axis=1)
+    prccs = PRCC_parallel(parameters_sampled, focused_results_df, sample_df)
     if results_csv is not None:
         prccs.to_csv(results_csv)
     else:
@@ -68,6 +72,10 @@ def LHS_and_PRCC_parallel(parameters_df,
 if __name__ == '__main__':
     parameters_df, fixed_parameters = load_parameters()
     other_samples_to_repeat = load_repeated_sample()
+    # no tests
+    fixed_parameters['Pre-travel test'] = False
+    fixed_parameters['Pre-match test'] = False
+    fixed_parameters['Post-match test'] = False
 
     model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
     model_run_method = model_or_simulation_obj.run_simulation

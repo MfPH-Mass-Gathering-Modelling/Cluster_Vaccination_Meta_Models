@@ -95,22 +95,22 @@ class SportMatchMGESimulation:
             # for now we are only interested in pre-travel screen so removing from team_a and team_b supporters, not tranfering.
             if vaccine_group_transfer_info['from_cluster'] in self.vistors_main:
                 lfd_from_index.update(vaccine_group_transfer_info['from_index'])
-        event_info_dict['Pre-travel LFD'] = {'from_index': list(lfd_from_index),
-                                             # 'to_index': list(lfd_to_index),
-                                             'times': -0.5,
-                                             'type': 'transfer'}
+        event_info_dict['Pre-travel RA'] = {'from_index': list(lfd_from_index),
+                                            # 'to_index': list(lfd_to_index),
+                                            'times': -0.5,
+                                            'type': 'transfer'}
         for vaccine_group_transfer_info in lfd_transfer_info:
             if vaccine_group_transfer_info['from_cluster'] in self.match_attendees_main:
                 lfd_from_index.update(vaccine_group_transfer_info['from_index'])
                 lfd_to_index.update(vaccine_group_transfer_info['to_index'])
-        event_info_dict['Pre-match LFD'] = {'from_index': list(lfd_from_index),
+        event_info_dict['Pre-match RA'] = {'from_index': list(lfd_from_index),
+                                           'to_index': list(lfd_to_index),
+                                           'times': 2.5,
+                                           'type': 'transfer'}
+        event_info_dict['Post-match RA'] = {'from_index': list(lfd_from_index),
                                             'to_index': list(lfd_to_index),
-                                            'times': 2.5,
+                                            'times': 6.5,
                                             'type': 'transfer'}
-        event_info_dict['Post-match LFD'] = {'from_index': list(lfd_from_index),
-                                             'to_index': list(lfd_to_index),
-                                             'times': 6.5,
-                                             'type': 'transfer'}
 
 
         rtpcr_transfer_info = self.model.group_transition_params_dict['tau_G']
@@ -215,7 +215,7 @@ class SportMatchMGESimulation:
         parameters['h_effective'] = 1 - ((1 - parameters['VE_{hos}']) / (1 - parameters['l_effective']))
         parameters['h_waned'] = 1 - ((1 - parameters['VW_{hos}']) / (1 - parameters['l_waned']))
 
-    def run_simulation(self, sampled_parameters, return_full_results=False):
+    def run_simulation(self, sampled_parameters, return_full_results=False, save_dir=None):
         # reset any changes in event queue caused by previously running self.run_simulation
         self.event_queue.reset_event_queue()
         parameters = {**self.fixed_parameters, **sampled_parameters}
@@ -393,7 +393,16 @@ class SportMatchMGESimulation:
         if return_full_results:
             sol_df = results_array_to_df(solution, self.model.state_index,
                                          start_time=self.start_time, simulation_step=self.time_step, end_time=self.end_time)
-            return focused_ouputs, sol_df, transfers_df
+            if save_dir is None:
+                return focused_ouputs, sol_df, transfers_df
+            else:
+                if 'Sample Number' in parameters:
+                    sol_df.to_csv(save_dir+'/Solution ' + str(parameters['Sample Number'])+ '.csv')
+                    transfers_df(save_dir+'/Event que transfers ' + str(parameters['Sample Number'])+ '.csv')
+                else:
+                    sol_df.to_csv(save_dir+'/Solution.csv')
+                    transfers_df(save_dir+'/Event que transfers.csv')
+                return focused_ouputs
         else:
             return focused_ouputs
 
