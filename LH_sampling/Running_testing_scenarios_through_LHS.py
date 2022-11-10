@@ -64,9 +64,22 @@ if __name__ == '__main__':
                                          'Post-match test': True}
                        }
     for testing_regime, test_parmeters in testing_regimes.items():
+        regime_save_dir = save_dir + '/' + testing_regime
+        if not os.path.exists(regime_save_dir):
+            os.makedirs(regime_save_dir)
         fixed_parameters.update(test_parmeters)
         model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
         model_run_method = model_or_simulation_obj.run_simulation
+        samples_already_run = []
+        for sample_num in range(len(sample_df)):
+            focused_output_file = regime_save_dir +'/Focused Outputs and Sample ' + str(sample_num)+ '.csv'
+            if os.path.isfile(focused_output_file):
+                samples_already_run.append(sample_num)
+                focused_output_df = pd.read_csv(LH_sample_file)
+
+
+
+        run_samples_in_parrallell(sample_df, model_run_method, save_dir=regime_save_dir, return_full_results=True)
 
 
 

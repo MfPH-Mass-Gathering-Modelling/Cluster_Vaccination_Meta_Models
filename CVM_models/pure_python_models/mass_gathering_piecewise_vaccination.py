@@ -66,8 +66,9 @@ class MassGatheringModel(BaseScipyClusterVacModel):
                 prog_symptoms = parameters['epsilon_3'] * y[states_index['P_I']]
                 p_h_v = parameters['p_h_s'] * (1 - parameters[ve_hospitalisation])
                 prog_hospital_path = p_h_v*prog_symptoms
-                prog_detected_path = (1-p_h_v)*parameters['p_d']*prog_symptoms
-                prog_symptomatic_undetected_path = (1-p_h_v)*(1-parameters['p_d'])*prog_symptoms
+                prog_not_hospital_path = prog_symptoms-prog_hospital_path
+                prog_detected_path = prog_not_hospital_path*parameters['p_d']
+                prog_symptomatic_undetected_path = prog_not_hospital_path-prog_detected_path
 
                 prog_mid_asymptomatic_stage = parameters['epsilon_3'] * y[states_index['P_A']]
 

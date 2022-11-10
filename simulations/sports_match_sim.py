@@ -9,6 +9,8 @@ import json
 import numpy as np
 import inspect
 
+import pandas as pd
+
 from CVM_models.pure_python_models.mass_gathering_piecewise_vaccination import MassGatheringModel
 # import function for calculating beta from R_0
 from CVM_models.Reproductive_Number.Beta_and_Reproduction import MGE_beta_no_vaccine_1_cluster
@@ -221,10 +223,11 @@ class SportMatchMGESimulation:
         parameters = {**self.fixed_parameters, **sampled_parameters}
         self._calculate_certain_parameters(parameters)
         # Setup population
-        host_tickets = round(parameters['Capacity'] * parameters['eta_{spectators}'])
-        visitor_tickets = parameters['Capacity'] - host_tickets
+        tickets = round(parameters['N_{tickets}'])
+        host_tickets = round(tickets * parameters['eta_{spectators}'])
+        visitor_tickets = tickets - host_tickets
         host_and_visitor_population = parameters['N_{hosts}'] + visitor_tickets
-        staff = round(parameters['Capacity']*parameters['eta_{staff}'])
+        staff = round(parameters['N_{staff}'])
 
         # Setup starting transmission and changes in transmission
         beta_derive_func_args = list(inspect.signature(MGE_beta_no_vaccine_1_cluster).parameters.keys())
@@ -351,8 +354,12 @@ class SportMatchMGESimulation:
                 p_h_v = parameters['p_h_s'] * (1 - parameters['h_' + vaccine_group])
                 asymptomatic_prob = 1 - p_s_v
                 hospitalised_prob = p_s_v * p_h_v
-                symptomatic_prob = p_s_v * (1 - p_h_v)* (1 - parameters['p_d'])
-                detected_prob = p_s_v * (1 - p_h_v)* parameters['p_d']
+                if cluster in ['team_A_supporters','team_B_supporters']:
+                    detection = 0
+                else:
+                    detection = parameters['p_d']
+                symptomatic_prob = p_s_v * (1 - p_h_v) * (1 - detection)
+                detected_prob = p_s_v * (1 - p_h_v) * detection
                 infection_branch_proportions = {'asymptomatic': asymptomatic_prob,
                                                 'symptomatic': symptomatic_prob,
                                                 'detected': detected_prob,
@@ -386,25 +393,28 @@ class SportMatchMGESimulation:
         all_hospitalisation_prevelances = hospital_prevelances.sum(axis=1)
         peak_hospitalised = all_hospitalisation_prevelances.max()
         total_hospitalisations = solution[-1, -2]
-        focused_ouputs = {'peak infected': peak_infected,
-                          'total infections': total_infections,
-                          'peak hospitalised': peak_hospitalised,
-                          'total hospitalisations': total_hospitalisations}
+        focused_ouputs_and_sample = {'peak infected': peak_infected,
+                                     'total infections': total_infections,
+                                     'peak hospitalised': peak_hospitalised,
+                                     'total hospitalisations': total_hospitalisations,
+                                     **sampled_parameters}
         if return_full_results:
             sol_df = results_array_to_df(solution, self.model.state_index,
                                          start_time=self.start_time, simulation_step=self.time_step, end_time=self.end_time)
             if save_dir is None:
-                return focused_ouputs, sol_df, transfers_df
+                return focused_ouputs_and_sample, sol_df, transfers_df
             else:
                 if 'Sample Number' in parameters:
-                    sol_df.to_csv(save_dir+'/Solution ' + str(parameters['Sample Number'])+ '.csv')
-                    transfers_df(save_dir+'/Event que transfers ' + str(parameters['Sample Number'])+ '.csv')
+                    sol_df.to_csv(save_dir+'/Solution ' + str(parameters['Sample Number'])+ '.csv', index = False, header=True)
+                    transfers_df.to_csv(save_dir+'/Event que transfers ' + str(parameters['Sample Number'])+ '.csv', index = False, header=True)
+                    focused_ouputs_df = pd.DataFrame([focused_ouputs_and_sample])
+                    focused_ouputs_df.to_csv(save_dir+'/Focused Outputs and Sample ' + str(parameters['Sample Number'])+ '.csv', index = False, header=True)
                 else:
                     sol_df.to_csv(save_dir+'/Solution.csv')
-                    transfers_df(save_dir+'/Event que transfers.csv')
-                return focused_ouputs
+                    transfers_df.to_csv(save_dir+'/Event que transfers.csv')
+                return focused_ouputs_and_sample
         else:
-            return focused_ouputs
+            return focused_ouputs_and_sample
 
 
 

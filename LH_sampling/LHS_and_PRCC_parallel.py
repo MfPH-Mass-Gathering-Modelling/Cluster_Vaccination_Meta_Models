@@ -25,23 +25,24 @@ def run_samples_in_parrallell(sample_df, model_run_method, **kwargs):
               colour='green') as pbar: # add a progress bar.
         with concurrent.futures.ProcessPoolExecutor() as executor: # set up paralisation for simulations
             simlations = [executor.submit(model_run_method, sample, **kwargs) for sample in samples]
-            focused_results_records = []
+            focused_results_and_sample_records = []
             for simlation in concurrent.futures.as_completed(simlations):
-                focused_results_records.append(simlation.result())
+                focused_results_and_sample_records.append(simlation.result())
                 pbar.update(1)
-    focused_results_df = pd.DataFrame.from_records(focused_results_records)
-    return focused_results_df
+    focused_results_and_sample_df = pd.DataFrame.from_records(focused_results_and_sample_records)
+    return focused_results_and_sample_df
 
-def PRCC_parallel(parameters_sampled, focused_results_df,sample_df):
+def PRCC_parallel(parameters_sampled, focused_results_and_sample_df):
     prcc_args = []
     for parameter in parameters_sampled:
         covariables = [item
                        for item in parameters_sampled
                        if item != parameter]
-        for output in focused_results_df.columns:
-            prcc_args.append((parameter, output, covariables))
+        for column in focused_results_and_sample_df.columns:
+            if column not in parameters_sampled:
+                prcc_args.append((parameter, column, covariables))
     with concurrent.futures.ProcessPoolExecutor() as executor:  # set up paralisation for PRCC calculations
-        calculations = [executor.submit(calucate_PRCC, sample_df, parameter, output, covariables)
+        calculations = [executor.submit(calucate_PRCC, focused_results_and_sample_df, parameter, output, covariables)
                         for parameter, output, covariables in prcc_args]
         prccs = []
         for calculation in calculations:
@@ -61,9 +62,8 @@ def LHS_and_PRCC_parallel(parameters_df,
         LHS_obj = qmc.LatinHypercube(len(parameters_df))
     LH_sample = LHS_obj.random(sample_size)
     sample_df, parameters_sampled = format_sample(parameters_df, LH_sample, other_samples_to_repeat)
-    focused_results_df = run_samples_in_parrallell(sample_df, model_run_method)
-    sample_df = pd.concat([sample_df, focused_results_df], axis=1)
-    prccs = PRCC_parallel(parameters_sampled, focused_results_df, sample_df)
+    focused_results_and_sample_df = run_samples_in_parrallell(sample_df, model_run_method)
+    prccs = PRCC_parallel(parameters_sampled, focused_results_and_sample_df)
     if results_csv is not None:
         prccs.to_csv(results_csv)
     else:

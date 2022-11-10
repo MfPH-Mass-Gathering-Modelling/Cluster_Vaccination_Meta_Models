@@ -38,8 +38,8 @@ def format_sample(parameters_df, LH_samples, other_samples_to_repeat=None):
     #     samples_df[parameter] = samples_df[parameter] >= 0.5
     return samples_df, parameters_sampled
 
-def calucate_PRCC(sample_df, parameter, output, covariables):
-    param_rank_pcor = pg.partial_corr(sample_df,
+def calucate_PRCC(results_and_sample_df, parameter, output, covariables):
+    param_rank_pcor = pg.partial_corr(results_and_sample_df,
                                       x=parameter, y=output,
                                       covar=covariables,
                                       method='spearman')
@@ -51,23 +51,23 @@ def LHS_PRCC_serial(parameters_df, sample_size, model_run_method,
         LHS_obj = qmc.LatinHypercube(len(parameters_df))
     LH_sample = LHS_obj.random(sample_size)
     sample_df, parameters_sampled = format_sample(parameters_df, LH_sample, other_samples_to_repeat)
-    focused_results_records = []
+    focused_results_and_sample_records = []
     samples = sample_df.to_dict('records')
     for sample in tqdm(samples, desc='Simulating LH Sample', position=1, leave=False, colour='green'):
         if y0 is None:
-            focused_results_records.append(model_run_method(sample))
+            focused_results_and_sample_records.append(model_run_method(sample))
         else:
-            focused_results_records.append(model_run_method(sample, y0=y0))
-    focused_results_df = pd.DataFrame.from_records(focused_results_records)
-    sample_df = pd.concat([sample_df, focused_results_df], axis=1)
+            focused_results_and_sample_records.append(model_run_method(sample, y0=y0))
+    focused_results_and_sample_df = pd.DataFrame.from_records(focused_results_and_sample_records)
     prccs = []
     for parameter in parameters_sampled:
         covariables = [item
                        for item in parameters_sampled
                        if item != parameter]
-        for output in focused_results_df.columns:
-            param_rank_pcor = calucate_PRCC(sample_df, parameter, output, covariables)
-            prccs.append(param_rank_pcor)
+        for column in focused_results_and_sample_df.columns:
+            if column not in parameters_sampled:
+                param_rank_pcor = calucate_PRCC(sample_df, parameter, column, covariables)
+                prccs.append(param_rank_pcor)
 
     prccs = pd.concat(prccs)
     prccs.sort_index(inplace=True)

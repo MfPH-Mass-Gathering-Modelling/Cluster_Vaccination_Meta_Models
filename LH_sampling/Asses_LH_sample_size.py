@@ -128,8 +128,8 @@ if __name__ == '__main__':
     model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
     model_run_method = model_or_simulation_obj.run_simulation
 
-    repeats_per_n = 20
-    start_n = 200*len(other_samples_to_repeat)
+    repeats_per_n = 10
+    start_n = 25*len(other_samples_to_repeat)
     std_aim = 0.01
     n_increase_addition = 25*len(other_samples_to_repeat)
     determine_LH_sample_size(parameters_df=parameters_df,
