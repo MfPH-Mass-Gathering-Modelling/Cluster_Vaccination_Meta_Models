@@ -16,7 +16,7 @@ def load_parameters(file='Parameters values in LHS Sports Match Sims.csv',
     # no waning immunity or flows of people between clusters and vaccination groups.
     parameters_held_at_0 =  {param: 0
                              for param in
-                             ['alpha', 'iota', 'nu_1', 'nu_b', 'nu_w', 'omega', 'tau_A', 'tau_G']}
+                             ['alpha', 'iota_{RA}', 'iota_{RTPCR}', 'nu_e', 'nu_b', 'nu_w']}
     fixed_params.update(parameters_held_at_0)
     return parameters_df, fixed_params
 

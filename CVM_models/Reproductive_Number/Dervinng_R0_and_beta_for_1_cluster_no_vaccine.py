@@ -21,8 +21,8 @@ mg_model.state_list
 disease_states = ['E____',
                   'G_I____','G_A____',
                   'P_I____','P_A____',
-                  'M_H____','M_D____','M_I____','M_A____',
-                  'F_H____','F_D____','F_I____','F_A____'
+                  'M_H____','M_I____','M_A____',
+                  'F_H____','F_I____','F_A____'
                   ]
 #model_R0 = R0(mg_model, disease_states) #  silenced as it causes NameError: name 'lambda__' is not defined
 #%%
@@ -85,8 +85,8 @@ infecteds = infecteds.subs(S, N)
 infecteds_jacobian = infecteds.jacobian(X=[E,
                                            G_I, G_A,
                                            P_I, P_A,
-                                           M_H, M_D, M_I, M_A,
-                                           F_H, F_D, F_I, F_A
+                                           M_H, M_I, M_A,
+                                           F_H, F_I, F_A
                                            ])
 
 
@@ -117,7 +117,6 @@ none_zero_eigen_values = [item for item in eigen_values.keys() if item !=0]
 sympy_R0 = none_zero_eigen_values[0]
 #%%
 sympy_R0 = sympy.simplify(sympy_R0)
-sympy_R0 = sympy.simplify(sympy_R0) # I think this is correct will have to check.
 
 #%%
 # Dervining Beta
@@ -127,5 +126,4 @@ eq_R0 = sympy.Eq(sympy_R0, R0)
 beta_eq = sympy.solve(eq_R0, beta)
 beta_eq = beta_eq[0]
 #%%
-beta_eq = sympy.simplify(beta_eq) # I think this is correct will have to check.
-beta_eq = sympy.simplify(beta_eq) # I think this is correct will have to check.
+beta_eq = sympy.simplify(beta_eq)

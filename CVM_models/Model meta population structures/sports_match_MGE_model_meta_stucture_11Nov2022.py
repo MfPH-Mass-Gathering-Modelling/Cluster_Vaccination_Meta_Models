@@ -16,8 +16,10 @@ import json
 def gen_clusters_vaccine_and_test_structures(clusters):
     vaccinable_states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'F_A', 'R']
     wanning_vaccine_efficacy_states = 'all'
-    LFD_true_positive_states = ['P_I', 'P_A', 'M_A', 'M_I', 'F_A', 'F_I']
-    PCR_true_positive_states = ['G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'M_I', 'F_A', 'F_I']
+    LFD_true_positive_states = ['P_I', 'P_A', 'M_A', 'M_I', 'M_H', 'F_A', 'F_I']
+    PCR_true_positive_states = ['G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'M_I', 'M_H', 'F_A', 'F_I']
+    self_isolating_state_to_states_hosp = ('P_I','M_H')
+    self_isolating_state_to_states_symp = ('P_I','M_I')
     PCR_delay = 'all'
     group_info = []
     for cluster in clusters:
@@ -25,7 +27,7 @@ def gen_clusters_vaccine_and_test_structures(clusters):
         to_and_from_cluster = {'from_cluster': cluster, 'to_cluster': cluster}
         first_vaccination = {**to_and_from_cluster,
                              'from_vaccine_group': 'unvaccinated', 'to_vaccine_group': 'effective',
-                             'parameter': 'nu_1', 'states': vaccinable_states}
+                             'parameter': 'nu_e', 'states': vaccinable_states}
 
         waning_vaccination = {**to_and_from_cluster,
                               'from_vaccine_group': 'effective', 'to_vaccine_group': 'waned',
@@ -37,53 +39,35 @@ def gen_clusters_vaccine_and_test_structures(clusters):
         group_info += [first_vaccination,
                        waning_vaccination,
                        booster_vaccination]
-        # now for tests
-        vaccine_groups = ['unvaccinated', 'effective', 'waned', ]
+        # now for isolation
+        vaccine_groups = ['unvaccinated', 'effective', 'waned']
+        # Testing
         # LFD test information
         LFD_positive = cluster + '_LFD_positive'
         to_and_from_cluster = {'from_cluster': cluster, 'to_cluster': LFD_positive}
-        
-        
         for vaccine_group in vaccine_groups:
             entry = {**to_and_from_cluster,
                      'from_vaccine_group': vaccine_group, 'to_vaccine_group': vaccine_group,
-                     'parameter': 'tau_A', 'states': LFD_true_positive_states}
-            group_info.append(entry)
-        
-        to_and_from_cluster = {'from_cluster': LFD_positive, 'to_cluster': cluster}
-        
-        for vaccine_group in vaccine_groups:
-            entry = {**to_and_from_cluster,
-                     'from_vaccine_group': vaccine_group, 'to_vaccine_group': vaccine_group,
-                     'parameter': 'iota', 'states': 'all'}
+                     'parameter': 'iota_{RA}', 'states': LFD_true_positive_states}
             group_info.append(entry)
 
         # RT_PCR test information
         PCR_positive_waiting = cluster +'_PCR_waiting'
         to_and_from_cluster = {'from_cluster': cluster, 'to_cluster': PCR_positive_waiting}
-        
         for vaccine_group in vaccine_groups:
             entry = {**to_and_from_cluster,
                      'from_vaccine_group': vaccine_group, 'to_vaccine_group': vaccine_group,
-                     'parameter': 'tau_G', 'states': PCR_true_positive_states}
+                     'parameter': 'iota_{RTPCR}', 'states': PCR_true_positive_states}
             group_info.append(entry)
         
         PCR_positive = cluster +'_PCR_positive'
         to_and_from_cluster = {'from_cluster': PCR_positive_waiting, 'to_cluster': PCR_positive}
-        
         for vaccine_group in vaccine_groups:
             entry = {**to_and_from_cluster,
                      'from_vaccine_group': vaccine_group, 'to_vaccine_group': vaccine_group,
-                     'parameter': 'omega', 'states': PCR_delay}
+                     'parameter': 'omega_{RTPCR}', 'states': PCR_delay}
             group_info.append(entry)
-            
-        to_and_from_cluster = {'from_cluster': PCR_positive, 'to_cluster': cluster}
-        
-        for vaccine_group in vaccine_groups:
-            entry = {**to_and_from_cluster,
-                     'from_vaccine_group': vaccine_group, 'to_vaccine_group': vaccine_group,
-                     'parameter': 'iota', 'states': 'all'}
-            group_info.append(entry)
+
     return group_info
 
 #%%

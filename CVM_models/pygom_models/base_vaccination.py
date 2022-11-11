@@ -14,11 +14,10 @@ class BaseMultiClusterVacConstructor:
     observed_states = []
     infectious_states = []
     symptomatic_states = []
-    isolating_states = []
     dead_states = []
     universal_params = []
     vaccine_specific_params = []
-    cluster_specific_params = ['kappa']
+    cluster_specific_params = []
     vaccine_and_cluster_specific_params = []
 
 
@@ -162,8 +161,6 @@ class BaseMultiClusterVacConstructor:
                 modifier = ''
                 if infectous_state not in self.symptomatic_states:
                     modifier += 'theta*'
-                if infectous_state in self.isolating_states:
-                    modifier += kappa_D+'*'
                 infectous_state = modifier + infectous_state
                 contributers.append(infectous_state)
             temp_lambda = [infectous_state + '_' + cluster_j + '_' + vaccine_group

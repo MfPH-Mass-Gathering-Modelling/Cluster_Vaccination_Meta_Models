@@ -23,12 +23,9 @@ class BaseScipyClusterVacModel:
     hospitalised_states = []
     infectious_states = []
     symptomatic_states = []
-    isolating_states = []
     transmission_term = 'beta'
     population_term = 'N'
     transmission_cluster_specfic = False
-    isolation_modifier = None
-    isolation_cluster_specfic = False
     asymptomatic_transmission_modifier = None
     non_transmission_universal_params = []
     non_transmission_cluster_specific_params = [] # does not include transmission term beta.
@@ -71,13 +68,6 @@ class BaseScipyClusterVacModel:
                     self.all_parameters.add(term)
                     self.transmission_to_terms[cluster_i][self.transmission_term].append(term)
                     self.transmission_from_terms[cluster_j][self.transmission_term].append(term)
-        if self.isolation_cluster_specfic:
-            if self.isolation_modifier is None:
-                raise AssertionError('isolation_modifier must be specifed to be considered cluster specific')
-            if not self.transmission_cluster_specfic:
-                raise AssertionError('isolation being cluster specific is only supported when transmission is cluster specific.')
-            self.all_parameters.update([self.isolation_modifier + '_' + cluster
-                                        for cluster in self.clusters])
         self.all_parameters = sorted(self.all_parameters)
         non_piece_wise_params_names = set(self.all_parameters)-set(self.params_estimated_via_piecewise_method)
         self.non_piece_wise_params_names = sorted(list(non_piece_wise_params_names))
@@ -113,7 +103,6 @@ class BaseScipyClusterVacModel:
                     population_terms.append(population_term)
         return {self.transmission_term: transmission_terms, self.population_term: population_terms}
 
-
     def gen_group_structure(self, group_structure):
         self.params_estimated_via_piecewise_method = []
         self.group_transfer_dict = {}
@@ -142,7 +131,7 @@ class BaseScipyClusterVacModel:
                 if to_vaccine_group not in self.vaccine_groups:
                     self.vaccine_groups.append(to_vaccine_group)
 
-                if group_transfer['states']=='all':
+                if group_transfer['states'] == 'all':
                     group_transfer['states'] = self.states
                 else:
                     for state in group_transfer['states']:
@@ -165,7 +154,6 @@ class BaseScipyClusterVacModel:
                          for key, value in group_transfer.items()
                          if key not in ['from_cluster', 'from_vaccine_group']}
                 self.group_transfer_dict[cluster][vaccine_group].append(entry)
-
 
     def group_transfer(self, y, y_deltas, t,
                        from_cluster,
@@ -220,23 +208,13 @@ class BaseScipyClusterVacModel:
 
     def _sorting_states(self):
         self.infectious_and_symptomatic_states = [state for state in self.infectious_states
-                                                  if state in self.symptomatic_states and
-                                                  state not in self.isolating_states]
+                                                  if state in self.symptomatic_states]
         self.infectious_and_asymptomatic_states = [state for state in self.infectious_states
-                                                   if state not in self.symptomatic_states and
-                                                   state not in self.isolating_states]
-        self.isolating_and_symptomatic_states = [state for state in self.infectious_states
-                                                 if state in self.symptomatic_states and
-                                                 state in self.isolating_states]
-        self.isolating_and_asymptomatic_states = [state for state in self.infectious_states
-                                                  if state not in self.symptomatic_states and
-                                                  state in self.isolating_states]
+                                                   if state not in self.symptomatic_states]
         self.all_states_index = {}
         self.state_index = {}
         self.infectious_symptomatic_indexes = {}
         self.infectious_asymptomatic_indexes = {}
-        self.isolating_asymptomatic_indexes = {}
-        self.isolating_symptomatic_indexes = {}
         self.infected_states_index_list = []
         self.hospitalised_states_index_list = []
         self.dead_states_index_list = []
@@ -246,8 +224,6 @@ class BaseScipyClusterVacModel:
             self.state_index[cluster] = {}
             self.infectious_symptomatic_indexes[cluster] = []
             self.infectious_asymptomatic_indexes[cluster] = []
-            self.isolating_asymptomatic_indexes[cluster] = []
-            self.isolating_symptomatic_indexes[cluster] = []
             for vaccine_group in self.vaccine_groups:
                 self.state_index[cluster][vaccine_group] = {}
                 for state in self.states:
@@ -257,10 +233,6 @@ class BaseScipyClusterVacModel:
                         self.infectious_symptomatic_indexes[cluster].append(index)
                     if state in self.infectious_and_asymptomatic_states:
                         self.infectious_asymptomatic_indexes[cluster].append(index)
-                    if state in self.isolating_and_symptomatic_states:
-                        self.isolating_symptomatic_indexes[cluster].append(index)
-                    if state in self.isolating_and_asymptomatic_states:
-                        self.isolating_asymptomatic_indexes[cluster].append(index)
                     if state in self.infected_states:
                         self.infected_states_index_list.append(index)
                     if state in self.hospitalised_states:
@@ -317,7 +289,6 @@ class BaseScipyClusterVacModel:
             y (numpy.array): Value of current state variables.
             beta (float or int): Transmission coefficient.
             asymptomatic_tran_mod (float or int): Modification due to asymptomatic/pre-symptomatic state.
-            isolation_mod: Modification due to isolation.
 
         Returns:
             float: Force of infection given state variables.
@@ -335,42 +306,21 @@ class BaseScipyClusterVacModel:
                 for cluster_j in self.clusters:
                     beta = parameters[self.transmission_term + '_' + cluster_i + '_' + cluster_j]
 
-                    if self.isolation_modifier is not None:
-                        if self.isolation_cluster_specfic:
-                            isolation_mod = parameters[self.isolation_modifier + '_' +cluster_j]
-                        else:
-                            isolation_mod = parameters[self.isolation_modifier]
-                    else:
-                        isolation_mod = 1
                     if beta > 0:
                         total_asymptomatic = (asymptomatic_transmission_modifier *
                                               y[self.infectious_asymptomatic_indexes[cluster_j]].sum())
                         total_symptomatic = y[self.infectious_symptomatic_indexes[cluster_j]].sum()
-                        total_isolating_asymptomatic = (isolation_mod * asymptomatic_transmission_modifier *
-                                                        y[self.isolating_asymptomatic_indexes[cluster_j]].sum())
-                        total_isolating_symptomatic = (isolation_mod *
-                                                       y[self.isolating_symptomatic_indexes[cluster_j]].sum())
-                        full_contribution = sum([total_asymptomatic, total_symptomatic,
-                                                 total_isolating_asymptomatic, total_isolating_symptomatic])
+                        full_contribution = sum([total_asymptomatic, total_symptomatic])
 
                         foi += beta * full_contribution / contactable_population
 
                 fois[cluster_i] = foi
         else:
-            if self.isolation_modifier is not None:
-                isolation_mod = parameters[self.isolation_modifier]
-            else:
-                isolation_mod = 1
             infectious_symptomatic_indexes = _nesteddictvalues(self.infectious_symptomatic_indexes)
             infectious_and_asymptomatic_indexes = _nesteddictvalues(self.infectious_asymptomatic_indexes)
-            isolating_asymptomatic_indexes = _nesteddictvalues(self.isolating_asymptomatic_indexes)
-            isolating_symptomatic_indexes = _nesteddictvalues(self.isolating_symptomatic_indexes)
             total_asymptomatic = asymptomatic_transmission_modifier *y[infectious_and_asymptomatic_indexes].sum()
             total_symptomatic = y[infectious_symptomatic_indexes].sum()
-            total_isolating_asymptomatic = isolation_mod*asymptomatic_transmission_modifier *y[isolating_asymptomatic_indexes].sum()
-            total_isolating_symptomatic = isolation_mod*y[isolating_symptomatic_indexes].sum()
-            full_contribution = sum([total_asymptomatic,total_symptomatic,
-                                     total_isolating_asymptomatic,total_isolating_symptomatic])
+            full_contribution = sum([total_asymptomatic,total_symptomatic])
             total_contactable_population = self.current_population(y)
             fois = parameters[self.transmission_term] * full_contribution / parameters[self.population_term]
         return fois

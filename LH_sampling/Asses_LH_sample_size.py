@@ -120,24 +120,54 @@ if __name__ == '__main__':
     other_samples_to_repeat = load_repeated_sample()
     save_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models')
     save_dir = save_dir +'/Determining Adaquate LH Size'
-    # no tests
-    fixed_parameters['Pre-travel test'] = False
-    fixed_parameters['Pre-match test'] = False
-    fixed_parameters['Post-match test'] = False
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
-    model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
-    model_run_method = model_or_simulation_obj.run_simulation
-
-    repeats_per_n = 10
+    repeats_per_n = 20
     start_n = 25*len(other_samples_to_repeat)
     std_aim = 0.01
     n_increase_addition = 25*len(other_samples_to_repeat)
-    determine_LH_sample_size(parameters_df=parameters_df,
-                             model_run_method=model_run_method,
-                             start_n=start_n,
-                             repeats_per_n=repeats_per_n,
-                             std_aim=std_aim,
-                             LHS_PRCC_method=LHS_and_PRCC_parallel,
-                             n_increase_addition=n_increase_addition,
-                             save_dir=save_dir,
-                             other_samples_to_repeat =other_samples_to_repeat)
+    testing_regimes = {'No Testing': {'Pre-travel test': False,
+                                      'Pre-match test': False,
+                                      'Post-match test': False},
+                       'Pre-travel RTPCR':{'test type': 'RTPCR',
+                                           'Pre-travel test':True,
+                                           'Pre-match test': False,
+                                           'Post-match test': False},
+                       'Pre-match RTPCR': {'test type': 'RTPCR',
+                                           'Pre-travel test': False,
+                                           'Pre-match test': True,
+                                           'Post-match test': False},
+                       'Post-match RTPCR': {'test type': 'RTPCR',
+                                            'Pre-travel test': False,
+                                            'Pre-match test': False,
+                                            'Post-match test': True},
+                       'Pre-travel RA': {'test type': 'RA',
+                                         'Pre-travel test': True,
+                                         'Pre-match test': False,
+                                         'Post-match test': False},
+                       'Pre-match RA': {'test type': 'RA',
+                                        'Pre-travel test': False,
+                                        'Pre-match test': True,
+                                        'Post-match test': False},
+                       'Post-match RA': {'test type': 'RA',
+                                         'Pre-travel test': False,
+                                         'Pre-match test': False,
+                                         'Post-match test': True}
+                       }
+    for testing_regime, test_parmeters in testing_regimes.items():
+        regime_save_dir = save_dir + '/' + testing_regime
+        if not os.path.exists(regime_save_dir):
+            os.makedirs(regime_save_dir)
+        fixed_parameters.update(test_parmeters)
+        model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
+        model_run_method = model_or_simulation_obj.run_simulation
+        determine_LH_sample_size(parameters_df=parameters_df,
+                                 model_run_method=model_run_method,
+                                 start_n=start_n,
+                                 repeats_per_n=repeats_per_n,
+                                 std_aim=std_aim,
+                                 LHS_PRCC_method=LHS_and_PRCC_parallel,
+                                 n_increase_addition=n_increase_addition,
+                                 save_dir=regime_save_dir,
+                                 other_samples_to_repeat =other_samples_to_repeat)

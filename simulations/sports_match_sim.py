@@ -52,11 +52,6 @@ class SportMatchMGESimulation:
                                               'P_I': 'epsilon_3',
                                               'M_I': 'gamma_I_1',
                                               'F_I': 'gamma_I_2'},
-                              'detected': {'E': 'epsilon_1',
-                                           'G_I': 'epsilon_2',
-                                           'P_I': 'epsilon_3',
-                                           'M_D': 'gamma_I_1',
-                                           'F_D': 'gamma_I_2'},
                               'hospitalised': {'E': 'epsilon_1',
                                                'G_I': 'epsilon_2',
                                                'P_I': 'epsilon_3',
@@ -73,13 +68,14 @@ class SportMatchMGESimulation:
         self.vistors_main = ['team_A_supporters', 'team_B_supporters']
         self.vistors_not_positive = (self.vistors_main +
                                      [cluster +'_PCR_waiting' for cluster in self.vistors_main])
-        self.positive_clusters = [cluster for cluster in self.model.clusters if cluster.endswith('positive')]
-        self.not_positive_clusters = [cluster for cluster in self.model.clusters if cluster not in self.positive_clusters]
+        self.isolating_clusters = [cluster for cluster in self.model.clusters
+                                   if cluster.endswith('positive') or cluster.endswith('self_isolating')]
+        self.not_isolating_clusters = [cluster for cluster in self.model.clusters if cluster not in self.isolating_clusters]
 
         self.match_attendees_main = self.vistors_main + ['host_spectators', 'host_staff']
         self.match_attendees_not_positive = (self.match_attendees_main +
                                              [cluster +'_PCR_waiting' for cluster in self.match_attendees_main])
-        self.not_attending_match = ['hosts', 'hosts_PCR_waiting'] + self.positive_clusters
+        self.not_attending_match = ['hosts', 'hosts_PCR_waiting'] + self.isolating_clusters
 
 
         # Setting up event_queue.
@@ -90,7 +86,7 @@ class SportMatchMGESimulation:
         event_info_dict = {}
 
         # Setup Tests events
-        lfd_transfer_info = self.model.group_transition_params_dict['tau_A']
+        lfd_transfer_info = self.model.group_transition_params_dict['iota_{RA}']
         lfd_from_index = set()
         lfd_to_index = set()
         for vaccine_group_transfer_info in lfd_transfer_info:
@@ -115,7 +111,7 @@ class SportMatchMGESimulation:
                                             'type': 'transfer'}
 
 
-        rtpcr_transfer_info = self.model.group_transition_params_dict['tau_G']
+        rtpcr_transfer_info = self.model.group_transition_params_dict['iota_{RTPCR}']
         rtpcr_from_index = set()
         rtpcr_to_index = set()
         for vaccine_group_transfer_info in rtpcr_transfer_info:
@@ -162,6 +158,7 @@ class SportMatchMGESimulation:
         event_info_dict['visitor arrival beta changes'] = {'type': 'change parameter',
                                                            'changing_parameters': beta_visitors_arrive,
                                                            'times': 0}
+
         event_info_dict['Restart Cumulative counts'] = {'from_index': [-1,-2],
                                                         'proportion': 1,
                                                         'times': 0,
@@ -236,32 +233,23 @@ class SportMatchMGESimulation:
         beta = MGE_beta_no_vaccine_1_cluster(**params_for_deriving_beta)
         
         # starting transmission terms
-        # all positive clusters will be isolating but interact with all so ...
-        beta_from_test_positive = beta * parameters['kappa']
+        # all isolating clusters will have reduced transmission
+        isolation_beta = beta * parameters['kappa']
         update_params_with_to_from_cluster_param(parameters,
                                                  self.model.clusters,
-                                                 self.positive_clusters,
+                                                 self.isolating_clusters,
                                                  'beta',
-                                                 beta_from_test_positive)
-        # likewise for all positive clusters detected isolation is unaffected as they are isolating already.
-        update_params_with_cluster_param(parameters,
-                                         self.positive_clusters,
-                                         'kappa',
-                                         1)
-        # for all other clusters this takes the value of kappa.
-        update_params_with_cluster_param(parameters,
-                                         self.not_positive_clusters,
-                                         'kappa',
-                                         parameters['kappa'])
+                                                 isolation_beta)
+
 
         # There positive population only gets added to once pre match testing begins so ..
         update_params_with_cluster_param(parameters,
-                                         self.positive_clusters,
+                                         self.isolating_clusters,
                                          'N',
                                          host_and_visitor_population)
-        # positive clusters only include infecteds in this model (they cannot be infected again so):
+        # isolating clusters only include infecteds or recovereds in this model (they cannot be infected again so):
         update_params_with_to_from_cluster_param(parameters,
-                                                 self.positive_clusters,
+                                                 self.isolating_clusters,
                                                  self.model.clusters,
                                                  'beta',
                                                  0)
@@ -276,9 +264,7 @@ class SportMatchMGESimulation:
                                          self.host_not_positive,
                                          'N',
                                          parameters['N_{hosts}'])  # starts off just Qatari population
-        
-        
-        
+
         # all visitor clusters do not transmit to begin with.
         update_params_with_to_from_cluster_param(parameters,
                                                  self.model.clusters, self.vistors_not_positive,
@@ -354,15 +340,9 @@ class SportMatchMGESimulation:
                 p_h_v = parameters['p_h_s'] * (1 - parameters['h_' + vaccine_group])
                 asymptomatic_prob = 1 - p_s_v
                 hospitalised_prob = p_s_v * p_h_v
-                if cluster in ['team_A_supporters','team_B_supporters']:
-                    detection = 0
-                else:
-                    detection = parameters['p_d']
-                symptomatic_prob = p_s_v * (1 - p_h_v) * (1 - detection)
-                detected_prob = p_s_v * (1 - p_h_v) * detection
+                symptomatic_prob = p_s_v * (1 - p_h_v)
                 infection_branch_proportions = {'asymptomatic': asymptomatic_prob,
                                                 'symptomatic': symptomatic_prob,
-                                                'detected': detected_prob,
                                                 'hospitalised': hospitalised_prob}
                 params_for_seeding = {key: value for key, value in parameters.items()
                                       if key in self.seeder.parameters}
