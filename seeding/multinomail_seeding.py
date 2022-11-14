@@ -7,7 +7,6 @@ Description: Class for Multnomial random draw seeding of infections.
 """
 from numbers import Number
 from numpy.random import multinomial
-from pandas import DataFrame
 import math
 
 class InfectionBranch:
@@ -25,7 +24,7 @@ class InfectionBranch:
             raise TypeError(outflows_err_msg)
         self.outflows = outflows
 
-    def calculate_weighting(self, proportion, parameters):
+    def calculate_weighting(self, parameters):
         parameters_error = ('parameters argument should be a dictionary,' +
                             ' with keys being strings and values being numbers.')
         if not isinstance(parameters, dict):
@@ -35,9 +34,25 @@ class InfectionBranch:
         if any(not isinstance(key,str) for key in parameters.keys()):
             raise TypeError(parameters_error)
 
-        return {state: proportion*(parameters[outflow]**-1)
-                for state, outflow in self.outflows.items()}
+        weightings = {}
+        total = 0
+        for state, outflow in self.outflows.items():
+            weighting = parameters[outflow] ** -1
+            weightings[state] = weighting
+            total += weighting
 
+        noramlised_weightings = {state: weight/total for state, weight in weightings.items()}
+
+        return noramlised_weightings
+
+    def seed_infections(self, n, parameters):
+        weighting = self.calculate_weighting(parameters)
+        pvals = list(weighting.values())
+        states = list(weighting.keys())
+        draw = multinomial(n=n, pvals=pvals, size=1)
+        draw = draw[0]
+        draw_dict = {state: draw[index] for index, state in enumerate(states)}
+        return draw_dict
 
 
 
@@ -54,27 +69,14 @@ class MultnomialSeeder:
             if not isinstance(branch_info, dict):
                 raise TypeError('branch_info should be a dictionary of dictionaries.')
             self.branches[branch_name] = InfectionBranch(branch_name, outflows)
-
-    def calculate_weighting(self, proportions, parameters):
-        for index, (branch_name, branch) in enumerate(self.branches.items()):
-            branch_weighting = branch.calculate_weighting(proportions[branch_name],
-                                                          parameters)
-            if index == 0:
-                weighting = branch_weighting
-            else:
-                for state, weight in branch_weighting.items():
-                    if state in weighting:
-                        weighting[state] += weight
-                    else:
-                        weighting[state] = weight
-
-        weighting_total = sum(weighting.values())
-        weighting = {key:value/weighting_total for key, value in weighting.items()}
-        return weighting
-
-    def seed_infections(self, n, proportions, parameters, size=1):
-        if not(isinstance(size,int)) or size <= 0:
-            raise TypeError('size must be an int >0.')
+    def seed_branches(self, n, proportions):
+        pvals = list(proportions.values())
+        branches = list(proportions.keys())
+        draw = multinomial(n=n, pvals=pvals, size=1)
+        draw = draw[0]
+        draw_dict = {branch: draw[index] for index, branch in enumerate(branches)}
+        return draw_dict
+    def seed_infections(self, n, proportions, parameters):
         prob_error = ', all proportion argument should be a number <=1 and >=0.'
         for key, value in proportions.items():
             if not isinstance(value, Number):
@@ -85,15 +87,16 @@ class MultnomialSeeder:
         if not math.isclose(1, proportions_total, abs_tol=0.000001):
             raise ValueError('The sum of dictionary values in proportions should equal 1, it is equal to ' +
                              str(proportions_total)+'.')
-        weighting = self.calculate_weighting(proportions, parameters)
-        pvals = list(weighting.values())
-        states = list(weighting.keys())
-        draw = multinomial(n=n, pvals=pvals, size=size)
-        if size>1:
-            draw = DataFrame(draw, columns=states)
-        else:
-            draw = dict(zip(states ,draw[0]))
-        return draw
+        branch_draw = self.seed_branches(n, proportions)
+        infections_draw = {}
+        for branch_name, branch_seed in branch_draw.items():
+            branch = self.branches[branch_name]
+            branch_infection_draw = branch.seed_infections(branch_seed, parameters)
+            states_already_drawn = set(infections_draw.keys()).union(set(branch_infection_draw.keys()))
+            updated_infection_draws = {state: branch_infection_draw.get(state, 0) + infections_draw .get(state, 0)
+                                       for state in states_already_drawn}
+            infections_draw = updated_infection_draws
+        return infections_draw
 
 
 

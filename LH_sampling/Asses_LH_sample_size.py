@@ -123,8 +123,8 @@ if __name__ == '__main__':
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
 
-    repeats_per_n = 20
-    start_n = 25*len(other_samples_to_repeat)
+    repeats_per_n = 10
+    sample_size = 250*len(other_samples_to_repeat)
     std_aim = 0.01
     n_increase_addition = 25*len(other_samples_to_repeat)
     testing_regimes = {'No Testing': {'Pre-travel test': False,
@@ -162,12 +162,12 @@ if __name__ == '__main__':
         fixed_parameters.update(test_parmeters)
         model_or_simulation_obj = SportMatchMGESimulation(fixed_parameters=fixed_parameters)
         model_run_method = model_or_simulation_obj.run_simulation
-        determine_LH_sample_size(parameters_df=parameters_df,
-                                 model_run_method=model_run_method,
-                                 start_n=start_n,
-                                 repeats_per_n=repeats_per_n,
-                                 std_aim=std_aim,
-                                 LHS_PRCC_method=LHS_and_PRCC_parallel,
-                                 n_increase_addition=n_increase_addition,
-                                 save_dir=regime_save_dir,
-                                 other_samples_to_repeat =other_samples_to_repeat)
+        sample_size = determine_LH_sample_size(parameters_df=parameters_df,
+                                               model_run_method=model_run_method,
+                                               start_n=sample_size,
+                                               repeats_per_n=repeats_per_n,
+                                               std_aim=std_aim,
+                                               LHS_PRCC_method=LHS_and_PRCC_parallel,
+                                               n_increase_addition=n_increase_addition,
+                                               save_dir=regime_save_dir,
+                                               other_samples_to_repeat =other_samples_to_repeat)

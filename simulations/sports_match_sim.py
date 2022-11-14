@@ -207,9 +207,8 @@ class SportMatchMGESimulation:
         gamma_I_1 = 2/(parameters['gamma_{IT}^{-1}']-parameters['epsilon_1']**-1-parameters['epsilon_2']**-1-parameters['epsilon_3']**-1)
         parameters['gamma_I_1'] = gamma_I_1
         parameters['gamma_I_2'] = gamma_I_1
-        gamma_A_1 = 2/(parameters['gamma_{AT}^{-1}-epsilon_{1}^{-1}']-parameters['epsilon_2']**-1-parameters['epsilon_3']**-1)
-        parameters['gamma_A_1'] = gamma_A_1
-        parameters['gamma_A_2'] = gamma_A_1
+        parameters['gamma_A_1'] = gamma_I_1
+        parameters['gamma_A_2'] = gamma_I_1
         parameters['p_h_s'] = parameters['p_h']/parameters['p_s']
         parameters['h_effective'] = 1 - ((1 - parameters['VE_{hos}']) / (1 - parameters['l_effective']))
         parameters['h_waned'] = 1 - ((1 - parameters['VW_{hos}']) / (1 - parameters['l_waned']))
@@ -220,7 +219,7 @@ class SportMatchMGESimulation:
         parameters = {**self.fixed_parameters, **sampled_parameters}
         self._calculate_certain_parameters(parameters)
         # Setup population
-        tickets = round(parameters['N_{tickets}'])
+        tickets = round(parameters['Capacity'])
         host_tickets = round(tickets * parameters['eta_{spectators}'])
         visitor_tickets = tickets - host_tickets
         host_and_visitor_population = parameters['N_{hosts}'] + visitor_tickets
@@ -363,6 +362,11 @@ class SportMatchMGESimulation:
                                                                  y0=y0,
                                                                  end_time=self.end_time, start_time=self.start_time,
                                                                  simulation_step=self.time_step)
+        test_events = ['Pre-travel RTPCR', 'Pre-travel RA',
+                       'Pre-match RTPCR', 'Pre-match RA',
+                       'Post-match RTPCR', 'Post-match RA']
+        tested_positives = transfers_df[transfers_df.event.isin(test_events)]
+        tested_positive_total = tested_positives.transfered.sum()
         run_time = np.arange(self.start_time,self.end_time,self.time_step)
         MGE_run_time_start = np.where(run_time==0)[0][0]
         infection_prevelances = solution[MGE_run_time_start:, self.model.infected_states_index_list]
@@ -377,6 +381,7 @@ class SportMatchMGESimulation:
                                      'total infections': total_infections,
                                      'peak hospitalised': peak_hospitalised,
                                      'total hospitalisations': total_hospitalisations,
+                                     'total positive tests': tested_positive_total,
                                      **sampled_parameters}
         if return_full_results:
             sol_df = results_array_to_df(solution, self.model.state_index,

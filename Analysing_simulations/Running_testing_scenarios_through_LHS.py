@@ -16,9 +16,9 @@ from simulations.sports_match_sim import SportMatchMGESimulation
 if __name__ == '__main__':
     parameters_df, fixed_parameters = load_parameters()
     other_samples_to_repeat = load_repeated_sample()
-    sample_size = 200 * len(other_samples_to_repeat)
-    save_dir = ('C:/Users/mdgru/OneDrive - York University/Documents/York University Postdoc/Mass Gathering work/Compartment based models/Cluster_Vaccination_Meta_Models')
-    save_dir = save_dir +'/Assesing testing regimes with LH sample Size' + str(sample_size)
+    sample_size = 275 * len(other_samples_to_repeat)
+    save_dir = 'C:/Users/mdgru/OneDrive - York University/Data/World_cup_modelling'
+    save_dir = save_dir + '/Assesing testing regimes with LH sample Size' + str(sample_size)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     LH_sample_file = save_dir+'/LH sample.csv'
