@@ -18,7 +18,7 @@ if __name__ == '__main__':
     other_samples_to_repeat = load_repeated_sample()
     sample_size = 275 * len(other_samples_to_repeat)
     save_dir = 'C:/Users/mdgru/OneDrive - York University/Data/World_cup_modelling'
-    save_dir = save_dir + '/Assesing testing regimes with LH sample Size' + str(sample_size)
+    save_dir = save_dir + '/Assesing testing regimes with LH sample Size ' + str(sample_size)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     LH_sample_file = save_dir+'/LH sample.csv'

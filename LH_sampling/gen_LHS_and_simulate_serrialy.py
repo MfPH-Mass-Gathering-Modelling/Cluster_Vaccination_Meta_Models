@@ -37,13 +37,12 @@ def format_sample(parameters_df, LH_samples, other_samples_to_repeat=None):
     # for parameter in convert_to_bool:
     #     samples_df[parameter] = samples_df[parameter] >= 0.5
     return samples_df, parameters_sampled
-
-def calucate_PRCC(results_and_sample_df, parameter, output, covariables):
+def calucate_PCC(results_and_sample_df, parameter, output, covariables, method):
     param_rank_pcor = pg.partial_corr(results_and_sample_df,
                                       x=parameter, y=output,
                                       covar=covariables,
-                                      method='spearman')
-    param_rank_pcor.rename(index={'spearman': parameter + ' on ' + output}, inplace=True)
+                                      method=method)
+    param_rank_pcor.rename(index={method: parameter + ' on ' + output}, inplace=True)
     return param_rank_pcor
 def LHS_PRCC_serial(parameters_df, sample_size, model_run_method,
                     results_csv = None, LHS_obj=None, y0=None, other_samples_to_repeat=None):
