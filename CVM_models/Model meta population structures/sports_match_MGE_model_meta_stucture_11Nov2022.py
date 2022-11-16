@@ -18,8 +18,6 @@ def gen_clusters_vaccine_and_test_structures(clusters):
     wanning_vaccine_efficacy_states = 'all'
     LFD_true_positive_states = ['P_I', 'P_A', 'M_A', 'M_I', 'M_H', 'F_A', 'F_I']
     PCR_true_positive_states = ['G_I', 'G_A', 'P_I', 'P_A', 'M_A', 'M_I', 'M_H', 'F_A', 'F_I']
-    self_isolating_state_to_states_hosp = ('P_I','M_H')
-    self_isolating_state_to_states_symp = ('P_I','M_I')
     PCR_delay = 'all'
     group_info = []
     for cluster in clusters:

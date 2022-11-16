@@ -65,7 +65,7 @@ def LHS_PRCC_serial(parameters_df, sample_size, model_run_method,
                        if item != parameter]
         for column in focused_results_and_sample_df.columns:
             if column not in parameters_sampled:
-                param_rank_pcor = calucate_PRCC(sample_df, parameter, column, covariables)
+                param_rank_pcor = calucate_PCC(sample_df, parameter, column, covariables, method='spearman')
                 prccs.append(param_rank_pcor)
 
     prccs = pd.concat(prccs)

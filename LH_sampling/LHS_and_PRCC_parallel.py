@@ -12,7 +12,7 @@ from scipy.stats import qmc
 from tqdm.auto import tqdm
 import concurrent
 from simulations.sports_match_sim import SportMatchMGESimulation
-from LH_sampling.gen_LHS_and_simulate_serrialy import format_sample, calucate_PRCC
+from LH_sampling.gen_LHS_and_simulate_serrialy import format_sample, calucate_PCC
 from LH_sampling.load_variables_and_parameters import load_parameters, load_repeated_sample
 
 
@@ -42,7 +42,7 @@ def PRCC_parallel(parameters_sampled, focused_results_and_sample_df):
             if column not in parameters_sampled:
                 prcc_args.append((parameter, column, covariables))
     with concurrent.futures.ProcessPoolExecutor() as executor:  # set up paralisation for PRCC calculations
-        calculations = [executor.submit(calucate_PRCC, focused_results_and_sample_df, parameter, output, covariables)
+        calculations = [executor.submit(calucate_PCC, focused_results_and_sample_df, parameter, output, covariables)
                         for parameter, output, covariables in prcc_args]
         prccs = []
         for calculation in calculations:
@@ -63,7 +63,7 @@ def LHS_and_PRCC_parallel(parameters_df,
     LH_sample = LHS_obj.random(sample_size)
     sample_df, parameters_sampled = format_sample(parameters_df, LH_sample, other_samples_to_repeat)
     focused_results_and_sample_df = run_samples_in_parrallell(sample_df, model_run_method)
-    prccs = PRCC_parallel(parameters_sampled, focused_results_and_sample_df)
+    prccs = PCC_parallel(parameters_sampled, focused_results_and_sample_df, method='spearman')
     if results_csv is not None:
         prccs.to_csv(results_csv)
     else:

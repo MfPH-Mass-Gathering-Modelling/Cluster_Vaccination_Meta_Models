@@ -219,10 +219,10 @@ class SportMatchMGESimulation:
         parameters = {**self.fixed_parameters, **sampled_parameters}
         self._calculate_certain_parameters(parameters)
         # Setup population
-        tickets = round(parameters['Capacity'])
-        host_tickets = round(tickets * parameters['eta_{spectators}'])
-        visitor_tickets = tickets - host_tickets
-        host_and_visitor_population = parameters['N_{hosts}'] + visitor_tickets
+        attendees = round(parameters['N_{A}'])
+        host_attendees = round(attendees * parameters['eta_{spectators}'])
+        visitor_attendees = attendees - host_attendees
+        host_and_visitor_population = parameters['N_{hosts}'] + visitor_attendees
         staff = round(parameters['N_{staff}'])
 
         # Setup starting transmission and changes in transmission
@@ -272,10 +272,10 @@ class SportMatchMGESimulation:
         update_params_with_to_from_cluster_param(parameters,
                                                  self.vistors_not_positive, self.model.clusters,
                                                  'beta', 0)
-        # all vistor population are half the number of visitor tickets to begin with
+        # all vistor population are half the number of visitor attendees to begin with
         update_params_with_cluster_param(parameters,
                                          self.vistors_not_positive,
-                                         'N', round(visitor_tickets/2))
+                                         'N', round(visitor_attendees/2))
         
         # visitors arrive transmission terms changes
         self.event_queue.change_event_value('visitor arrival beta changes', beta)
@@ -302,7 +302,7 @@ class SportMatchMGESimulation:
         # Setting up host population
         hosts_unvaccinated = parameters['N_{hosts}'] - parameters['N_{hosts,full}']
         hosts_waned_vaccinated = parameters['N_{hosts,full}'] - parameters['N_{hosts,eff}']
-        host_sub_population = gen_host_sub_popultion(parameters['N_{hosts}'], host_tickets, staff,
+        host_sub_population = gen_host_sub_popultion(parameters['N_{hosts}'], host_attendees, staff,
                                                      hosts_unvaccinated, 
                                                      parameters['N_{hosts,eff}'],
                                                      hosts_waned_vaccinated,
@@ -316,12 +316,12 @@ class SportMatchMGESimulation:
         team_B_vacc_status_proportion = {'unvaccinated': 0,
                                          'effective': parameters['v_B'],
                                          'waned': 1 - parameters['v_B']}
-        tickets_per_team = round(0.5 * visitor_tickets)
-        visitor_sub_pop = {'team_A_supporters': gen_visitor_sub_population(tickets_per_team,
+        attendees_per_team = round(0.5 * visitor_attendees)
+        visitor_sub_pop = {'team_A_supporters': gen_visitor_sub_population(attendees_per_team,
                                                                            team_A_vacc_status_proportion,
                                                                            parameters['Team A prevalence'],
                                                                            parameters['sigma_A']),
-                           'team_B_supporters': gen_visitor_sub_population(tickets_per_team,
+                           'team_B_supporters': gen_visitor_sub_population(attendees_per_team,
                                                                            team_B_vacc_status_proportion,
                                                                            parameters['Team B prevalence'],
                                                                            parameters['sigma_B'])

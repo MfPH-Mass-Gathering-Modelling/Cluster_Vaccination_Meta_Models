@@ -31,6 +31,6 @@ def load_repeated_sample(prevalence_file='Prevalence data.csv',
     # For now we are removing matches where qatar plays.
     schedule_df = schedule_df[schedule_df['Team A']!='Qatar']
     schedule_df = schedule_df[schedule_df['Team B']!= 'Qatar']
-    selection = ['Team A prevalence', 'Team B prevalence', 'Capacity']
+    selection = ['Team A prevalence', 'Team B prevalence']#, 'Capacity']
     return schedule_df[selection]
 

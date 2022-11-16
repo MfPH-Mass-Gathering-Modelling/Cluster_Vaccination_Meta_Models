@@ -23,12 +23,16 @@ if not os.path.exists(fig_dir):
     os.mkdir(fig_dir)
 fig_dir = fig_dir +'/'
 
-
-
 #%%
-# loading data
-# LH sample
+# Useful lists and variables.
+outputs = ['peak infected',
+           'total infections',
+           'peak hospitalised',
+           'total hospitalisations',
+           'total positive tests']
 LH_sample = pd.read_csv(data_dir+'LH sample.csv')
+parameters_sampled = LH_sample.columns.to_list()
+parameters_sampled.remove('Sample Number')
 testing_regimes = ['No Testing',
                    'Pre-travel RTPCR',
                    'Pre-travel RA',
@@ -37,6 +41,12 @@ testing_regimes = ['No Testing',
                    'Post-match RTPCR',
                    'Post-match RA'
                    ]
+
+#%%
+# loading data
+# LH sample
+
+
 
 results_dfs = {}
 for testing_regime in tqdm(testing_regimes, desc='loading data from testing regime'):
@@ -51,14 +61,50 @@ for testing_regime in tqdm(testing_regimes, desc='loading data from testing regi
         results_dfs[testing_regime] = df
 
 #%%
+# Test regime as parameter
+actual_testing_regimes = copy.deepcopy(testing_regimes)
+actual_testing_regimes.remove('No Testing')
+test_PCC = []
+for testing_regime in actual_testing_regimes:
+    no_testing_results_df = copy.deepcopy(results_dfs['No Testing'])
+    no_testing_results_df[testing_regime] = 0
+    testing_regime_results = copy.deepcopy(results_dfs[testing_regime])
+    testing_regime_results[testing_regime] = 1
+    comparison_df = pd.concat([no_testing_results_df,testing_regime_results])
+    for output in outputs:
+        for method in ['spearman', 'pearson']:
+            PCC = calucate_PCC(comparison_df,
+                               parameter=testing_regime,
+                               output=output,
+                               covariables=parameters_sampled,
+                               method=method)
+            PCC['Correlation'] = method
+            test_PCC.append(PCC)
+
+plt.figure()
+col_order = ['spearman', 'pearson']
+fig = sns.FacetGrid(data=test_PCC_df,
+                    height=6.5, aspect=0.8,
+                    col='Correlation', col_order=col_order,
+                    xlim=(-1, 1), hue='Test Regime', hue_order=actual_testing_regimes)
+for index, correlation in enumerate(col_order):
+    sub_plot = fig.axes[0,index]
+    selected_data = test_PCC_df[test_PCC_df.Correlation == correlation]
+    sns.barplot(ax=sub_plot, data=selected_data, x="r", y="Output",width=0.5,
+                order=outputs, hue='Test Regime', hue_order=actual_testing_regimes)
+    if index==len(col_order)-1:
+        handles, labels = sub_plot.get_legend_handles_labels()
+    sub_plot.get_legend().remove()
+
+plt.tight_layout(rect=(0,0,0.85,1))
+fig.figure.legend(handles, labels,title='Testing Regime',
+                  borderaxespad=0, bbox_to_anchor=(0.49, 0.2, 0.5, 0.5), loc='upper right')
+plt.savefig(fig_dir + 'Test Regime PCCs against no testing.tiff')
+
+#%%
 # Calculating PCCs
-parameters_sampled = LH_sample.columns.to_list()
-parameters_sampled.remove('Sample Number')
-outputs = ['peak infected',
-           'total infections',
-           'peak hospitalised',
-           'total hospitalisations',
-           'total positive tests']
+
+
 pcc_args = []
 for parameter in parameters_sampled:
     covariables = [item
@@ -72,8 +118,10 @@ PCCs = []
 for testing_regime, results_df in tqdm(results_dfs.items(), desc='PCCs for testing regime'):
     pccs_in_regime = []
     for parameter, output, covariables in tqdm(pcc_args, desc='PCC for parameter'):
-        PCC = calucate_PCC(results_df, parameter, output, covariables, method='spearman')
-        pccs_in_regime.append(PCC)
+        for method in ['spearman', 'pearson']:
+            PCC = calucate_PCC(results_df, parameter, output, covariables, method=method)
+            PCC['Correlation'] = method
+            pccs_in_regime.append(PCC)
 
 
     pccs_in_regime = pd.concat(pccs_in_regime)
@@ -124,51 +172,23 @@ paramater_legend = {'$N_C$': 'Arena Capacity', '$N^*_{Q}$': 'Proportion of host 
 hue_order=testing_regimes
 for output in outputs:
     plt.figure() # clear any prevously plotted figures
+    sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
     selected_output_df = PCCs_df[PCCs_df.Output == output]
-    fig = sns.stripplot(selected_output_df, x="r", y="Parameter", order=order, hue='Test Regime', hue_order=hue_order)
+    fig = sns.FacetGrid(data=selected_output_df,
+                        height=6.5, aspect=0.8,
+                        col='Correlation',
+                        hue='Test Regime', hue_order=hue_order,
+                        xlim=(-1,1))
+    fig.map(sns.stripplot,"r", "Parameter", order=order)
     fig.set_yticklabels(paramater_legend.keys())
-    fig.set_xlim(-1,1)
-    sns.move_legend(fig, 'upper left', bbox_to_anchor=(1, 0.75), ncol=1)
-
+    for ax in fig.axes.flat:
+        ax.grid(True, axis='both')
     plt.tight_layout()
-    plt.grid(visible='both')
-    plt.savefig(fig_dir+'PRCCs '+ output+ '.tiff')
+    fig.add_legend()
+    # sns.move_legend(fig, 'upper left', bbox_to_anchor=(1, 0.75), ncol=1)
+    plt.savefig(fig_dir+'PCCs '+ output+ '.tiff')
 
-#%%
-# Test regime as parameter
-actual_testing_regimes = copy.deepcopy(testing_regimes)
-actual_testing_regimes.remove('No Testing')
-test_PCC = []
-for testing_regime in actual_testing_regimes:
-    no_testing_results_df = copy.deepcopy(results_dfs['No Testing'])
-    no_testing_results_df[testing_regime] = 0
-    testing_regime_results = copy.deepcopy(results_dfs[testing_regime])
-    testing_regime_results[testing_regime] = 1
-    comparison_df = pd.concat([no_testing_results_df,testing_regime_results])
-    for output in outputs:
-        test_PCC.append(calucate_PCC(comparison_df,
-                                     parameter=testing_regime,
-                                     output=output,
-                                     covariables=parameters_sampled,
-                                     method='spearman')
-                        )
 
-test_PCC_df = pd.concat(test_PCC)
-test_PCC_df.reset_index(inplace=True)
-PCC_measure = test_PCC_df['index'].str.split(' on ', n = 1, expand = True)
-test_PCC_df['Test Regime'] = PCC_measure[0]
-test_PCC_df['Output'] = PCC_measure[1]
-test_PCC_df.drop(columns=['index'],inplace=True)
-test_PCC_df[['lower_CI_0.95','upper_CI_0.95']] = pd.DataFrame(test_PCC_df['CI95%'].tolist())
-test_PCC_df.drop(columns=['CI95%'], inplace=True)
 
-plt.figure()  # clear any prevously plotted figures
-fig = sns.stripplot(test_PCC_df, x="r", y="Output", hue='Test Regime', hue_order=actual_testing_regimes)
-fig.set_xlim(-1, 1)
-fig.set_yticklabels([entry.replace(' ','\n') for entry in outputs])
-sns.move_legend(fig, 'upper left', bbox_to_anchor=(1, 0.75), ncol=1)
-plt.tight_layout()
-plt.grid(visible='both')
-plt.savefig(fig_dir + 'Test Regime PRCCs against no testing.tiff')
 
-#%%
+
