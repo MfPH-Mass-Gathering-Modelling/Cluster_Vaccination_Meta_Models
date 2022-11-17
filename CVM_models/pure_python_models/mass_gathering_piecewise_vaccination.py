@@ -18,7 +18,7 @@ class MassGatheringModel(BaseScipyClusterVacModel):
     states = ['S', 'E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_H', 'M_I', 'M_A', 'F_H', 'F_I', 'F_A', 'R']
     observed_states = ['Cumulative hospitalisation', 'Cumulative infections']
     infected_states = ['E', 'G_I', 'G_A', 'P_I', 'P_A', 'M_H',  'M_I', 'M_A', 'F_H',  'F_I', 'F_A']
-    hospitalised_states = ['M_H']
+    hospitalised_states = ['F_H']
     infectious_states = ['P_I', 'P_A',  'M_I', 'M_A', 'M_H',  'F_I', 'F_A']
     symptomatic_states = ['M_I', 'F_I',  'M_H', 'F_H']
     non_transmission_universal_params = ['epsilon_1', 'epsilon_2', 'epsilon_3', 'epsilon_H',

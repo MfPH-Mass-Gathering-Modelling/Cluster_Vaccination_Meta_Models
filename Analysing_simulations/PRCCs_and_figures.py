@@ -25,11 +25,12 @@ fig_dir = fig_dir +'/'
 
 #%%
 # Useful lists and variables.
-outputs = ['peak infected',
-           'total infections',
-           'peak hospitalised',
+outputs = ['total infections',
+           'peak infected',
            'total hospitalisations',
+           'peak hospitalised',
            'total positive tests']
+output_labels = [output.title().replace(' ', '\n') for output in outputs]
 LH_sample = pd.read_csv(data_dir+'LH sample.csv')
 parameters_sampled = LH_sample.columns.to_list()
 parameters_sampled.remove('Sample Number')
@@ -41,13 +42,12 @@ testing_regimes = ['No Testing',
                    'Post-match RTPCR',
                    'Post-match RA'
                    ]
+col_order = ['spearman', 'pearson']
+sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
 
 #%%
 # loading data
 # LH sample
-
-
-
 results_dfs = {}
 for testing_regime in tqdm(testing_regimes, desc='loading data from testing regime'):
     regime_data_dir = data_dir + testing_regime + '/'
@@ -62,49 +62,58 @@ for testing_regime in tqdm(testing_regimes, desc='loading data from testing regi
 
 #%%
 # Test regime as parameter
-actual_testing_regimes = copy.deepcopy(testing_regimes)
-actual_testing_regimes.remove('No Testing')
-test_PCC = []
-for testing_regime in actual_testing_regimes:
-    no_testing_results_df = copy.deepcopy(results_dfs['No Testing'])
-    no_testing_results_df[testing_regime] = 0
-    testing_regime_results = copy.deepcopy(results_dfs[testing_regime])
-    testing_regime_results[testing_regime] = 1
-    comparison_df = pd.concat([no_testing_results_df,testing_regime_results])
-    for output in outputs:
-        for method in ['spearman', 'pearson']:
-            PCC = calucate_PCC(comparison_df,
-                               parameter=testing_regime,
-                               output=output,
-                               covariables=parameters_sampled,
-                               method=method)
-            PCC['Correlation'] = method
-            test_PCC.append(PCC)
-
-plt.figure()
-col_order = ['spearman', 'pearson']
-fig = sns.FacetGrid(data=test_PCC_df,
-                    height=6.5, aspect=0.8,
-                    col='Correlation', col_order=col_order,
-                    xlim=(-1, 1), hue='Test Regime', hue_order=actual_testing_regimes)
-for index, correlation in enumerate(col_order):
-    sub_plot = fig.axes[0,index]
-    selected_data = test_PCC_df[test_PCC_df.Correlation == correlation]
-    sns.barplot(ax=sub_plot, data=selected_data, x="r", y="Output",width=0.5,
-                order=outputs, hue='Test Regime', hue_order=actual_testing_regimes)
-    if index==len(col_order)-1:
-        handles, labels = sub_plot.get_legend_handles_labels()
-    sub_plot.get_legend().remove()
-
-plt.tight_layout(rect=(0,0,0.85,1))
-fig.figure.legend(handles, labels,title='Testing Regime',
-                  borderaxespad=0, bbox_to_anchor=(0.49, 0.2, 0.5, 0.5), loc='upper right')
-plt.savefig(fig_dir + 'Test Regime PCCs against no testing.tiff')
+# actual_testing_regimes = copy.deepcopy(testing_regimes)
+# actual_testing_regimes.remove('No Testing')
+# test_PCC = []
+# for testing_regime in actual_testing_regimes:
+#     no_testing_results_df = copy.deepcopy(results_dfs['No Testing'])
+#     no_testing_results_df[testing_regime] = 0
+#     testing_regime_results = copy.deepcopy(results_dfs[testing_regime])
+#     testing_regime_results[testing_regime] = 1
+#     comparison_df = pd.concat([no_testing_results_df,testing_regime_results])
+#     for output in outputs:
+#         for method in ['spearman', 'pearson']:
+#             PCC = calucate_PCC(comparison_df,
+#                                parameter=testing_regime,
+#                                output=output,
+#                                covariables=parameters_sampled,
+#                                method=method)
+#             PCC['Correlation'] = method
+#             test_PCC.append(PCC)
+#
+# test_PCC = pd.concat(test_PCC)
+# test_PCC.reset_index(inplace=True)
+# PCC_measure = test_PCC['index'].str.split(' on ', n = 1, expand = True)
+# test_PCC['Test Regime'] = PCC_measure[0]
+# test_PCC['Output'] = PCC_measure[1]
+# test_PCC.drop(columns=['index'],inplace=True)
+# test_PCC[['lower_CI_0.95','upper_CI_0.95']] = pd.DataFrame(test_PCC['CI95%'].tolist())
+# test_PCC.drop(columns=['CI95%'], inplace=True)
+#
+#
+# plt.figure()
+# fig = sns.FacetGrid(data=test_PCC,
+#                     height=7, aspect=0.9,
+#                     col='Correlation', col_order=col_order,
+#                     xlim=(-1, 1), hue='Test Regime', hue_order=actual_testing_regimes)
+# for index, correlation in enumerate(col_order):
+#     sub_plot = fig.axes[0,index]
+#     selected_data = test_PCC[test_PCC.Correlation == correlation]
+#     sns.barplot(ax=sub_plot, data=selected_data, x="r", y="Output",width=0.5,
+#                 order=outputs, hue='Test Regime', hue_order=actual_testing_regimes)
+#     if index==len(col_order)-1:
+#         handles, labels = sub_plot.get_legend_handles_labels()
+#     sub_plot.get_legend().remove()
+#
+# fig.set_yticklabels(output_labels)
+# plt.tight_layout(rect=(0,0,0.85,1))
+# fig.figure.legend(handles, labels,title='Testing Regime',
+#                   borderaxespad=0, bbox_to_anchor=(0.48, 0.2, 0.5, 0.75), loc='upper right')
+# # plt.show()
+# plt.savefig(fig_dir + 'Test Regime PCCs against no testing.tiff')
 
 #%%
 # Calculating PCCs
-
-
 pcc_args = []
 for parameter in parameters_sampled:
     covariables = [item
@@ -147,46 +156,61 @@ PCCs_df.drop(columns=['CI95%'], inplace=True)
 
 #%%
 # Figures
-order = ['Capacity', 'eta_{spectators}', 'N_{staff}',
+order = ['N_{A}', 'eta_{spectators}', 'N_{staff}',
          'v_A', 'v_B',
          'Team A prevalence', 'Team B prevalence',
-         'sigma_A', 'sigma_B', 'sigma_{host}',
-         'R_0', 'b',
-         'l_effective', 'VE_{hos}',
-         'epsilon_H', 'gamma_H',
-         'p_s',  'p_h',
-         'kappa', 'theta']
-paramater_legend = {'$N_C$': 'Arena Capacity', '$N^*_{Q}$': 'Proportion of host tickets',
+         'sigma_A', 'sigma_B', 'sigma_{host}']
+         # 'R_0', 'b',
+         # 'l_effective', 'VE_{hos}',
+         # 'epsilon_H', 'gamma_H',
+         # 'p_s',  'p_h',
+         # 'kappa', 'theta']
+paramater_legend = {'$N_A$': 'Number of Attendees',
+                    '$N^*_{Q}$': 'Proportion of host tickets',
                     '$N_{S}$': 'Staff Population',
-                    '$v_A$':'Proportion Recently Vaccinated  Team A', '$v_B$':'Proportion Recently Vaccinated  Team B',
-                   '$\\rho_A$':'Reported Prevalence Supporters A', '$\\rho_B$':'Reported Prevalence Supporters B',
-                   '$\sigma_A$': 'Actual/Reported Prevalence Supporters A',
+                    '$v_A$':'Proportion Recently Vaccinated  Team A',
+                    '$v_B$':'Proportion Recently Vaccinated  Team B',
+                    '$\\rho_A$':'Reported Prevalence Supporters A',
+                    '$\\rho_B$':'Reported Prevalence Supporters B',
+                    '$\sigma_A$': 'Actual/Reported Prevalence Supporters A',
                     '$\sigma_B$': 'Actual/Reported Prevalence Supporters B',
-                    '$\sigma_H$': 'Actual/Reported Prevalence Hosts',
-                   '$R_0$': 'Basic Reproduction Number', '$b$': 'Increase in Transmission Match Day',
-                   '$l_E$':'Recent Vaccine Efficacy against infection', '$VE_{h}$':'Recent Vaccine Efficacy against hospitalising infection',
-                   '$\epsilon_h$':'Rate of Hospitalisation', '$\gamma_h$':'Rate of Hospital Recovery',
-                   '$p_s$':'Proportion Symptomatic', '$p_{h|s}$':'Proportion Hospitalised given Symptomatic',
-                   '$\kappa$':'Asymptomatic Transmission Modifier', '$\\theta$': 'Isolated Transmission Modifier'}
+                    '$\sigma_H$': 'Actual/Reported Prevalence Hosts'}#,
+                    # '$R_0$': 'Basic Reproduction Number',
+                    # '$b$': 'Increase in Transmission Match Day',
+                    # '$l_E$':'Recent Vaccine Efficacy against infection',
+                    # '$VE_{h}$':'Recent Vaccine Efficacy against hospitalising infection',
+                    # '$\epsilon_h$':'Rate of Hospitalisation',
+                    # '$\gamma_h$':'Rate of Hospital Recovery',
+                    # '$p_s$':'Proportion Symptomatic',
+                    # '$p_{h|s}$':'Proportion Hospitalised given Symptomatic',
+                    # '$\kappa$':'Asymptomatic Transmission Modifier',
+                    # '$\\theta$': 'Isolated Transmission Modifier'}
 
-hue_order=testing_regimes
-for output in outputs:
+# for output in outputs:
+output = outputs[0]
     plt.figure() # clear any prevously plotted figures
-    sns.set_style("darkgrid", {"grid.color": ".6", "grid.linestyle": ":"})
-    selected_output_df = PCCs_df[PCCs_df.Output == output]
-    fig = sns.FacetGrid(data=selected_output_df,
+    selected_output_data = PCCs_df[PCCs_df.Output == output]
+    fig = sns.FacetGrid(data=selected_output_data,
                         height=6.5, aspect=0.8,
                         col='Correlation',
-                        hue='Test Regime', hue_order=hue_order,
+                        hue='Test Regime', hue_order=testing_regimes,
                         xlim=(-1,1))
-    fig.map(sns.stripplot,"r", "Parameter", order=order)
+    for index, correlation in enumerate(col_order):
+        sub_plot = fig.axes[0, index]
+        selected_correlation_data = selected_output_data[selected_output_data.Correlation == correlation]
+        sns.barplot(ax=sub_plot, data=selected_correlation_data , x="r", y="Parameter", width=0.5,
+                    order=order, hue='Test Regime', hue_order=testing_regimes)
+        if index == len(col_order) - 1:
+            handles, labels = sub_plot.get_legend_handles_labels()
+        sub_plot.get_legend().remove()
     fig.set_yticklabels(paramater_legend.keys())
-    for ax in fig.axes.flat:
-        ax.grid(True, axis='both')
-    plt.tight_layout()
-    fig.add_legend()
-    # sns.move_legend(fig, 'upper left', bbox_to_anchor=(1, 0.75), ncol=1)
-    plt.savefig(fig_dir+'PCCs '+ output+ '.tiff')
+    # for ax in fig.axes.flat:
+    #     ax.grid(True, axis='both')
+    plt.tight_layout(rect=(0, 0, 0.85, 1))
+    fig.figure.legend(handles, labels, title='Testing Regime',
+                      borderaxespad=0, bbox_to_anchor=(0.48, 0.2, 0.5, 0.75), loc='upper right')
+    plt.show()
+    # plt.savefig(fig_dir+'PCCs '+ output+ '.tiff')
 
 
 

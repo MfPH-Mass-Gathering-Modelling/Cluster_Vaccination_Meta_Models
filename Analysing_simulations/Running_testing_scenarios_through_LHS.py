@@ -18,7 +18,7 @@ if __name__ == '__main__':
     other_samples_to_repeat = load_repeated_sample()
     sample_size = 275 * len(other_samples_to_repeat)
     save_dir = 'C:/Users/mdgru/OneDrive - York University/Data/World_cup_modelling'
-    save_dir = save_dir + '/Assesing testing regimes with LH sample Size ' + str(sample_size) + '2nd run'
+    save_dir = save_dir + '/Assesing testing regimes with LH sample Size ' + str(sample_size)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     LH_sample_file = save_dir+'/LH sample.csv'
@@ -75,11 +75,11 @@ if __name__ == '__main__':
             focused_output_file = regime_save_dir +'/Focused Outputs and Sample ' + str(sample_num)+ '.csv'
             if os.path.isfile(focused_output_file):
                 samples_already_run.append(sample_num)
-                focused_output_df = pd.read_csv(LH_sample_file)
 
+        samples_not_run_df = sample_df[~sample_df['Sample Number'].isin(samples_already_run)]
 
-
-        run_samples_in_parrallell(sample_df, model_run_method, save_dir=regime_save_dir, return_full_results=True)
+        if len(samples_not_run_df)>0:
+            run_samples_in_parrallell(samples_not_run_df, model_run_method, save_dir=regime_save_dir, return_full_results=True)
 
 
 

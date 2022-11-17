@@ -8,7 +8,7 @@ Description: Set up an object for running world cup match MGE modelling simulati
 import json
 import numpy as np
 import inspect
-
+import itertools
 import pandas as pd
 
 from CVM_models.pure_python_models.mass_gathering_piecewise_vaccination import MassGatheringModel
@@ -21,6 +21,8 @@ from cleaning_up_results.results_to_dfs import results_array_to_df, results_df_p
 from setting_up_utils.pop_setup import gen_host_sub_popultion, gen_visitor_sub_population
 from setting_up_utils.cluster_params import (list_to_and_from_cluster_param, list_cluster_param,
                                              update_params_with_to_from_cluster_param, update_params_with_cluster_param)
+
+
 
 
 # Load metapopulation informations
@@ -60,6 +62,20 @@ class SportMatchMGESimulation:
         # setting up seeding class
         self.seeder = MultnomialSeeder(infection_branches)
 
+    def _create_transfer_index(self, transfer_info, groups):
+        from_index = []
+        to_index = []
+        for vaccine_group_transfer_info in transfer_info:
+            # for now we are only interested in pre-travel screen so removing from team_a and team_b supporters, not tranfering.
+            if vaccine_group_transfer_info['from_cluster'] in groups:
+                if vaccine_group_transfer_info['from_index'] not in from_index:
+                    from_index.append(vaccine_group_transfer_info['from_index'])
+                    to_index.append(vaccine_group_transfer_info['to_index'])
+        from_index = list(itertools.chain.from_iterable(from_index))
+        to_index = list(itertools.chain.from_iterable(to_index))
+        return from_index, to_index
+
+
     def _setup_event_queue(self):
         # useful lists of clusters
         self.hosts_main = ['hosts', 'host_spectators','host_staff']
@@ -80,60 +96,39 @@ class SportMatchMGESimulation:
 
         # Setting up event_queue.
         self.start_time = -2
-        self.end_time = 50
+        self.end_time = 200
         self.time_step = 0.5 # https://bmcinfectdis.biomedcentral.com/articles/10.1186/s12879-021-06528-3#:~:text=This%20systematic%20review%20has%20identified,one%20single%20centred%20trial%20(BD
 
         event_info_dict = {}
 
         # Setup Tests events
-        lfd_transfer_info = self.model.group_transition_params_dict['iota_{RA}']
-        lfd_from_index = set()
-        lfd_to_index = set()
-        for vaccine_group_transfer_info in lfd_transfer_info:
-            # for now we are only interested in pre-travel screen so removing from team_a and team_b supporters, not tranfering.
-            if vaccine_group_transfer_info['from_cluster'] in self.vistors_main:
-                lfd_from_index.update(vaccine_group_transfer_info['from_index'])
-        event_info_dict['Pre-travel RA'] = {'from_index': list(lfd_from_index),
-                                            # 'to_index': list(lfd_to_index),
+        ra_transfer_info = self.model.group_transition_params_dict['iota_{RA}']
+        visitor_ra_from_index, visitor_ra_to_index = self._create_transfer_index(ra_transfer_info,
+                                                                                 self.vistors_main)
+        event_info_dict['Pre-travel RA'] = {'from_index': visitor_ra_from_index,
+                                            # 'to_index': visitor_ra_to_index,
                                             'times': -0.5,
                                             'type': 'transfer'}
-        for vaccine_group_transfer_info in lfd_transfer_info:
-            if vaccine_group_transfer_info['from_cluster'] in self.match_attendees_main:
-                lfd_from_index.update(vaccine_group_transfer_info['from_index'])
-                lfd_to_index.update(vaccine_group_transfer_info['to_index'])
-        event_info_dict['Pre-match RA'] = {'from_index': list(lfd_from_index),
-                                           'to_index': list(lfd_to_index),
+        attendee_ra_from_index, attendee_ra_to_index = self._create_transfer_index(ra_transfer_info,
+                                                                                   self.match_attendees_main)
+        event_info_dict['Pre-match RA'] = {'from_index': attendee_ra_from_index,
+                                           'to_index': attendee_ra_to_index,
                                            'times': 2.5,
                                            'type': 'transfer'}
-        event_info_dict['Post-match RA'] = {'from_index': list(lfd_from_index),
-                                            'to_index': list(lfd_to_index),
+        event_info_dict['Post-match RA'] = {'from_index': attendee_ra_from_index,
+                                            'to_index': attendee_ra_to_index,
                                             'times': 6.5,
                                             'type': 'transfer'}
 
-
         rtpcr_transfer_info = self.model.group_transition_params_dict['iota_{RTPCR}']
-        rtpcr_from_index = set()
-        rtpcr_to_index = set()
-        for vaccine_group_transfer_info in rtpcr_transfer_info:
-            # for now we are only interested in pre-travel screen so removing from team_a and team_b supporters, not tranfering.
-            if vaccine_group_transfer_info['from_cluster'] in self.vistors_main:
-                rtpcr_from_index.update(vaccine_group_transfer_info['from_index'])
-        event_info_dict['Pre-travel RTPCR'] = {'from_index': list(rtpcr_from_index),
-                                               # 'to_index': list(rtpcr_to_index),
+        visitor_rtpcr_from_index, visitor_rtpcr_to_index = self._create_transfer_index(rtpcr_transfer_info,
+                                                                                       self.vistors_main)
+        event_info_dict['Pre-travel RTPCR'] = {'from_index': visitor_rtpcr_from_index,
+                                               # 'to_index': visitor_rtpcr_to_index,
                                                'times': -1.5,
                                                'type': 'transfer'}
-        for vaccine_group_transfer_info in rtpcr_transfer_info:
-            if vaccine_group_transfer_info['from_cluster'] in self.match_attendees_main:
-                rtpcr_from_index.update(vaccine_group_transfer_info['from_index'])
-                rtpcr_to_index.update(vaccine_group_transfer_info['to_index'])
-        event_info_dict['Pre-match RTPCR'] = {'from_index': list(rtpcr_from_index),
-                                              'to_index': list(rtpcr_to_index),
-                                              'times': 1.5,
-                                              'type': 'transfer'}
-        event_info_dict['Post-match RTPCR'] = {'from_index': list(rtpcr_from_index),
-                                               'to_index': list(rtpcr_to_index),
-                                               'times': 5.5,
-                                               'type': 'transfer'}
+        attendee_rtpcr_from_index, attendee_rtpcr_to_index = self._create_transfer_index(rtpcr_transfer_info,
+                                                                                         self.match_attendees_main)
 
         # Those about to be hospitalised or Hospitalised should be removed before arriving in host nation.
         visitor_pre_host_and_hosp = []
